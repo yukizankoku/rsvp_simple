@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import field %}
+{% block title %}Import Tamu{% endblock %}
+{% block content %}
+<div>
+  <a href="{{ url_for('guests.index', event_id=event.id) }}" class="text-sm text-slate-500 hover:text-slate-700">← Daftar tamu</a>
+  <h1 class="mt-1 text-2xl font-bold text-slate-900">Import tamu dari CSV</h1>
+  <p class="text-sm text-slate-500">{{ event.name }}</p>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <form method="post" enctype="multipart/form-data" class="card lg:col-span-2" novalidate>
+    {{ form.hidden_tag() }}
+    <div class="card-body space-y-4">
+      {{ field(form.file, accept=".csv,text/csv") }}
+      <p class="text-sm text-slate-600">Dari Excel / Google Sheets: <em>File → Save as / Download → CSV (UTF-8)</em>.</p>
+    </div>
+    <div class="flex gap-2 border-t border-slate-200 px-5 py-4">
+      <button class="btn-primary">Import</button>
+      <a href="{{ url_for('guests.index', event_id=event.id) }}" class="btn-ghost">Batal</a>
+    </div>
+  </form>
+
+  <section class="card">
+    <div class="border-b border-slate-200 px-5 py-4"><h2 class="font-semibold">Format kolom</h2></div>
+    <div class="card-body space-y-3 text-sm text-slate-600">
+      <p>Baris pertama berisi header. Hanya <code class="rounded bg-slate-100 px-1">name</code> yang wajib.</p>
+      <ul class="list-inside list-disc space-y-1 font-mono text-xs">
+        <li>name</li><li>phone</li><li>email</li><li>category <span class="font-sans text-slate-400">(VIP, Family, Friend, Client, Vendor, Employee, General, Other)</span></li>
+        <li>company</li><li>group_name</li><li>max_guest_count <span class="font-sans text-slate-400">(1–50)</span></li><li>notes</li>
+      </ul>
+      <a href="{{ url_for('guests.import_template', event_id=event.id) }}" class="btn-secondary w-full">Download template CSV</a>
+    </div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,108 @@
+{% from "partials/macros.html" import icon %}
+{# RSVP block. Swapped in place by HTMX after submit (falls back to a normal POST without JS). #}
+{% set error = error if error is defined else (result.error if result else None) %}
+{% set success = success if success is defined else (result.success if result else None) %}
+{% set answered = rsvp and rsvp.status != "pending" %}
+<section id="rsvp-section" class="scroll-mt-6 rounded-3xl bg-stone-900 p-6 text-white">
+  <h2 class="text-center font-serif text-2xl font-semibold">Konfirmasi Kehadiran</h2>
+
+  {% if success %}
+  <div class="mt-4 rounded-xl bg-emerald-500/15 px-4 py-3 text-center text-sm text-emerald-200 ring-1 ring-emerald-400/30" role="status">✓ {{ success }}</div>
+  {% endif %}
+  {% if error %}
+  <div class="mt-4 rounded-xl bg-rose-500/15 px-4 py-3 text-center text-sm text-rose-200 ring-1 ring-rose-400/30" role="alert">{{ error }}</div>
+  {% endif %}
+
+  {% if answered %}
+  <div class="mt-5 rounded-2xl bg-white/5 p-5 text-center ring-1 ring-white/10">
+    {% if rsvp.status == "attending" %}
+      <div class="text-3xl">🎉</div>
+      <p class="mt-2 font-semibold">Anda akan hadir</p>
+      <p class="text-sm text-white/60">{{ rsvp.guest_count }} orang</p>
+    {% else %}
+      <div class="text-3xl">🙏</div>
+      <p class="mt-2 font-semibold">Anda berhalangan hadir</p>
+      <p class="text-sm text-white/60">Terima kasih atas konfirmasinya.</p>
+    {% endif %}
+  </div>
+  {% if can_show_qr %}
+  <a href="{{ url_for('invitation.qr', token=guest.invitation_token) }}"
+     class="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-amber-300 px-6 py-3.5 text-sm font-bold text-stone-900 hover:bg-amber-200">
+    {{ icon("qr", "h-5 w-5") }} Tampilkan QR Saya
+  </a>
+  {% endif %}
+  {% endif %}
+
+  {% if is_checked_in %}
+    <p class="mt-4 text-center text-sm text-white/70">Anda sudah check-in di lokasi acara. Selamat menikmati acara!</p>
+  {% else %}
+  <details class="group mt-5" {{ "" if answered and not error else "open" }}>
+    {% if answered %}<summary class="cursor-pointer list-none text-center text-sm font-medium text-amber-200 underline underline-offset-4">Ubah konfirmasi</summary>{% endif %}
+    <form method="post" action="{{ url_for('invitation.rsvp', token=guest.invitation_token) }}"
+          hx-post="{{ url_for('invitation.rsvp', token=guest.invitation_token) }}" hx-target="#rsvp-section" hx-swap="outerHTML"
+          hx-disabled-elt="find button[type=submit]" class="mt-4 space-y-4" id="rsvp-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <fieldset>
+        <legend class="mb-3 text-center text-sm text-white/70">Apakah Anda akan hadir?</legend>
+        <div class="grid gap-3">
+          <label class="flex cursor-pointer items-center gap-3 rounded-2xl bg-white/5 px-4 py-4 ring-1 ring-white/15 has-[:checked]:bg-emerald-500/20 has-[:checked]:ring-emerald-400">
+            <input type="radio" name="status" value="attending" class="h-5 w-5 border-white/40 bg-transparent text-emerald-500 focus:ring-emerald-400"
+                   {{ "checked" if form.status.data == "attending" }} data-rsvp-status>
+            <span class="font-semibold">Ya, saya akan hadir</span>
+          </label>
+          <label class="flex cursor-pointer items-center gap-3 rounded-2xl bg-white/5 px-4 py-4 ring-1 ring-white/15 has-[:checked]:bg-rose-500/20 has-[:checked]:ring-rose-400">
+            <input type="radio" name="status" value="not_attending" class="h-5 w-5 border-white/40 bg-transparent text-rose-500 focus:ring-rose-400"
+                   {{ "checked" if form.status.data == "not_attending" }} data-rsvp-status>
+            <span class="font-semibold">Maaf, saya tidak bisa hadir</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div id="attending-fields" class="space-y-4 {{ '' if form.status.data == 'attending' else 'hidden' }}">
+        <div>
+          <label for="guest_count" class="mb-1 block text-sm text-white/70">Jumlah orang yang hadir (termasuk Anda)</label>
+          <div class="flex items-center gap-3">
+            <button type="button" class="h-11 w-11 rounded-full bg-white/10 text-xl font-semibold hover:bg-white/20" data-step="-1" aria-label="Kurangi">−</button>
+            <input type="number" id="guest_count" name="guest_count" min="1" max="{{ max_guest_count }}" inputmode="numeric"
+                   value="{{ form.guest_count.data or 1 }}"
+                   class="h-11 w-20 rounded-xl border-0 bg-white/10 text-center text-lg font-semibold text-white focus:ring-2 focus:ring-amber-300">
+            <button type="button" class="h-11 w-11 rounded-full bg-white/10 text-xl font-semibold hover:bg-white/20" data-step="1" aria-label="Tambah">+</button>
+            <span class="text-xs text-white/50">maks. {{ max_guest_count }}</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <label for="phone" class="mb-1 block text-sm text-white/70">No. HP (opsional)</label>
+        <input type="tel" id="phone" name="phone" value="{{ form.phone.data or '' }}" maxlength="30" autocomplete="tel"
+               class="w-full rounded-xl border-0 bg-white/10 px-4 py-3 text-white placeholder-white/40 focus:ring-2 focus:ring-amber-300" placeholder="08…">
+      </div>
+      <div>
+        <label for="notes" class="mb-1 block text-sm text-white/70">Ucapan / catatan (opsional)</label>
+        <textarea id="notes" name="notes" rows="3" maxlength="1000"
+                  class="w-full rounded-xl border-0 bg-white/10 px-4 py-3 text-white placeholder-white/40 focus:ring-2 focus:ring-amber-300"
+                  placeholder="Tulis pesan untuk penyelenggara…">{{ form.notes.data or '' }}</textarea>
+      </div>
+      <button type="submit" class="w-full rounded-full bg-amber-300 px-6 py-3.5 text-sm font-bold uppercase tracking-wide text-stone-900 hover:bg-amber-200 disabled:opacity-60">
+        Kirim Konfirmasi
+      </button>
+    </form>
+  </details>
+  {% endif %}
+
+  <script>
+    (function () {
+      var section = document.getElementById("rsvp-section");
+      var fields = section.querySelector("#attending-fields");
+      var count = section.querySelector("#guest_count");
+      section.querySelectorAll("[data-rsvp-status]").forEach(function (r) {
+        r.addEventListener("change", function () { fields && fields.classList.toggle("hidden", r.value !== "attending" || !r.checked); });
+      });
+      section.querySelectorAll("[data-step]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          var v = (parseInt(count.value, 10) || 1) + parseInt(b.dataset.step, 10);
+          count.value = Math.min(Math.max(v, 1), parseInt(count.max, 10));
+        });
+      });
+    })();
+  </script>
+</section>

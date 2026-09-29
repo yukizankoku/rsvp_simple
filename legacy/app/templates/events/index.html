@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import icon, event_status_badge %}
+{% block title %}Events{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-900">Events</h1>
+    <p class="text-sm text-slate-500">{{ events|length }} event</p>
+  </div>
+  {% if has_permission("event.create") %}
+  <a href="{{ url_for('events.create') }}" class="btn-primary">{{ icon("plus", "h-4 w-4") }} Buat Event</a>
+  {% endif %}
+</div>
+
+<form method="get" class="card flex flex-col gap-3 p-4 sm:flex-row">
+  <input type="search" name="q" value="{{ search }}" placeholder="Cari nama event…" class="input sm:max-w-xs">
+  <select name="status" class="input sm:w-44" onchange="this.form.submit()">
+    <option value="">Semua status</option>
+    {% for s in statuses %}<option value="{{ s }}" {{ "selected" if status == s }}>{{ s|capitalize }}</option>{% endfor %}
+  </select>
+  <button class="btn-secondary">Filter</button>
+</form>
+
+<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+  {% for event in events %}
+  <a href="{{ url_for('events.show', event_id=event.id) }}" class="card group overflow-hidden transition hover:shadow-md">
+    <div class="relative h-32 bg-gradient-to-br from-brand-500 to-violet-600">
+      {% if event.cover_image %}
+      <img src="{{ url_for('uploads.file', filename=event.cover_image) }}" alt="" class="h-full w-full object-cover">
+      {% endif %}
+      <div class="absolute right-3 top-3">{{ event_status_badge(event.status) }}</div>
+    </div>
+    <div class="card-body space-y-1">
+      <div class="text-xs font-medium uppercase tracking-wide text-brand-600">{{ event.event_type }} · {{ event.organization.name }}</div>
+      <div class="font-semibold text-slate-900 group-hover:text-brand-700">{{ event.name }}</div>
+      <div class="text-sm text-slate-500">{{ event.event_date|date_id }}{% if event.start_time %} · {{ event.start_time|time_short }}{% endif %}</div>
+      <div class="truncate text-sm text-slate-500">{{ event.venue_name or "—" }}</div>
+    </div>
+  </a>
+  {% else %}
+  <div class="card col-span-full p-10 text-center text-slate-500">
+    Belum ada event.
+    {% if has_permission("event.create") %}<a href="{{ url_for('events.create') }}" class="font-medium text-brand-600 hover:underline">Buat event pertama</a>.{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

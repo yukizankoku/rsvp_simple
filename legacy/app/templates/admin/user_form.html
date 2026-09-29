@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import field %}
+{% block title %}{{ "Edit" if user else "Tambah" }} Pengguna{% endblock %}
+{% block content %}
+<div>
+  <a href="{{ url_for('admin.users') }}" class="text-sm text-slate-500 hover:text-slate-700">← Pengguna</a>
+  <h1 class="mt-1 text-2xl font-bold text-slate-900">{{ "Edit pengguna" if user else "Tambah pengguna" }}</h1>
+</div>
+<form method="post" class="card" novalidate>
+  {{ form.hidden_tag() }}
+  <div class="card-body grid gap-4 sm:grid-cols-2">
+    {{ field(form.name) }}
+    {{ field(form.email, autocomplete="off") }}
+    {{ field(form.password, autocomplete="new-password", help=("Kosongkan jika tidak ingin mengubah password." if user else "Minimal 8 karakter.")) }}
+    {{ field(form.role_id) }}
+    {{ field(form.organization_id) }}
+    {% if not user or user.id != current_user.id %}{{ field(form.active, class_="self-end") }}{% endif %}
+    <div class="sm:col-span-2">
+      {{ form.event_ids.label(class="label") }}
+      <div class="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-300 p-3">
+        {% for value, label, selected, _ in form.event_ids.iter_choices() %}
+        <label class="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="event_ids" value="{{ value }}" {{ "checked" if selected }} class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+          {{ label }}
+        </label>
+        {% else %}
+        <p class="text-sm text-slate-500">Belum ada event.</p>
+        {% endfor %}
+      </div>
+      <p class="help">Super Admin otomatis dapat mengakses semua event.</p>
+    </div>
+  </div>
+  <div class="flex gap-2 border-t border-slate-200 px-5 py-4">
+    <button class="btn-primary">Simpan</button>
+    <a href="{{ url_for('admin.users') }}" class="btn-ghost">Batal</a>
+  </div>
+</form>
+{% endblock %}

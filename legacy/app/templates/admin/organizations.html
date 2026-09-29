@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import icon %}
+{% block title %}Organisasi{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-900">Organisasi / Klien</h1>
+    <p class="text-sm text-slate-500">Setiap event dimiliki oleh satu organisasi.</p>
+  </div>
+  <a href="{{ url_for('admin.organization_create') }}" class="btn-primary">{{ icon("plus", "h-4 w-4") }} Tambah organisasi</a>
+</div>
+<section class="card overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="table">
+      <thead><tr><th>Nama</th><th>Kontak</th><th>Event</th><th>Status</th><th class="text-right">Aksi</th></tr></thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for org in organizations %}
+        <tr>
+          <td>
+            <div class="flex items-center gap-3">
+              {% if org.logo %}<img src="{{ url_for('uploads.file', filename=org.logo) }}" class="h-8 w-8 rounded object-contain" alt="">
+              {% else %}<div class="grid h-8 w-8 place-items-center rounded bg-slate-100 text-xs font-bold text-slate-500">{{ org.name[:2]|upper }}</div>{% endif %}
+              <span class="font-medium">{{ org.name }}</span>
+            </div>
+          </td>
+          <td class="text-slate-500">{{ org.email or "" }}{% if org.phone %}<br>{{ org.phone }}{% endif %}</td>
+          <td class="tabular-nums">{{ event_count(org.id) }}</td>
+          <td><span class="{{ 'badge-green' if org.status == 'active' else 'badge-gray' }}">{{ org.status|capitalize }}</span></td>
+          <td>
+            <div class="flex justify-end gap-1">
+              <a href="{{ url_for('admin.organization_edit', org_id=org.id) }}" class="btn-ghost btn-sm">Edit</a>
+              <form method="post" action="{{ url_for('admin.organization_delete', org_id=org.id) }}" data-confirm="Hapus organisasi {{ org.name }}?">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn-ghost btn-sm text-rose-600">Hapus</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="py-10 text-center text-slate-500">Belum ada organisasi.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

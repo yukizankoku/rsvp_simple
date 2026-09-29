@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+uploads/*
+!uploads/.gitkeep
+node_modules/
+.pytest_cache/
+instance/
+*.log

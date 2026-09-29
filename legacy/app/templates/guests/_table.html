@@ -1,0 +1,71 @@
+{% from "partials/macros.html" import icon, rsvp_badge, invitation_badge, checkin_badge %}
+<section id="guest-table" class="card overflow-hidden">
+  <div class="flex items-center justify-between border-b border-slate-200 px-5 py-3 text-sm">
+    <span class="text-slate-600"><span class="font-semibold text-slate-900">{{ total }}</span> tamu ditemukan</span>
+    {% if pages > 1 %}<span class="text-slate-500">Halaman {{ page }} / {{ pages }}</span>{% endif %}
+  </div>
+  <div class="overflow-x-auto">
+    <table class="table">
+      <thead>
+        <tr><th>Nama</th><th>No. HP</th><th>Kategori</th><th>Undangan</th><th>RSVP</th><th>Jumlah</th><th>Check-in</th><th class="text-right">Aksi</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for g in guests %}
+        {% set link = invitation_url(g) %}
+        <tr>
+          <td>
+            <a href="{{ url_for('guests.show', guest_id=g.id) }}" class="font-medium text-slate-900 hover:text-brand-700">{{ g.name }}</a>
+            <div class="font-mono text-xs text-slate-400">{{ g.invitation_code }}{% if g.company %} · <span class="font-sans">{{ g.company }}</span>{% endif %}</div>
+          </td>
+          <td>{{ g.phone or "—" }}</td>
+          <td><span class="badge-gray">{{ g.category }}</span></td>
+          <td id="inv-status-{{ g.id }}">{{ invitation_badge(g.invitation_status) }}</td>
+          <td>{{ rsvp_badge(g.rsvp_status) }}</td>
+          <td class="tabular-nums">{{ g.rsvp.guest_count if g.rsvp and g.rsvp.status == "attending" else "—" }}</td>
+          <td>{{ checkin_badge(g) }}</td>
+          <td>
+            <div class="flex items-center justify-end gap-1">
+              {% if not g.is_disabled %}
+              <button type="button" class="btn-secondary btn-sm" data-copy="{{ link }}" title="Copy link undangan">{{ icon("link", "h-3.5 w-3.5") }} Copy</button>
+              {% if has_permission("invitation.send") %}
+              <form method="post" action="{{ url_for('guests.whatsapp', guest_id=g.id) }}" target="_blank"
+                    onsubmit="setTimeout(function(){htmx.ajax('GET', location.href, {target:'#guest-table', swap:'outerHTML', headers:{'HX-Target':'guest-table'}})}, 800)">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn-whatsapp btn-sm" title="Kirim via WhatsApp">WA</button>
+              </form>
+              {% endif %}
+              {% if not g.checkin and has_permission("checkin.perform") %}
+              <form method="post" action="{{ url_for('guests.checkin', guest_id=g.id) }}" data-confirm="Check-in {{ g.name }} sekarang?">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <button class="btn-secondary btn-sm" title="Check-in manual">{{ icon("check", "h-3.5 w-3.5") }}</button>
+              </form>
+              {% endif %}
+              {% endif %}
+              <a href="{{ url_for('guests.edit', guest_id=g.id) }}" class="btn-ghost btn-sm">Edit</a>
+              <a href="{{ url_for('guests.show', guest_id=g.id) }}" class="btn-ghost btn-sm">Detail</a>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="py-12 text-center text-slate-500">
+          {% if filters.values()|select|list %}Tidak ada tamu yang cocok dengan filter.{% else %}Belum ada tamu. <a href="{{ url_for('guests.create', event_id=event.id) }}" class="font-medium text-brand-600 hover:underline">Tambah tamu</a> atau <a href="{{ url_for('guests.import_guests', event_id=event.id) }}" class="font-medium text-brand-600 hover:underline">import CSV</a>.{% endif %}
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if pages > 1 %}
+  <div class="flex justify-between border-t border-slate-200 px-5 py-3">
+    {% set args = dict(filters) %}
+    {% if page > 1 %}
+    <a class="btn-secondary btn-sm" href="{{ url_for('guests.index', event_id=event.id, page=page-1, **args) }}"
+       hx-get="{{ url_for('guests.index', event_id=event.id, page=page-1, **args) }}" hx-target="#guest-table" hx-swap="outerHTML" hx-push-url="true">← Sebelumnya</a>
+    {% else %}<span></span>{% endif %}
+    {% if page < pages %}
+    <a class="btn-secondary btn-sm" href="{{ url_for('guests.index', event_id=event.id, page=page+1, **args) }}"
+       hx-get="{{ url_for('guests.index', event_id=event.id, page=page+1, **args) }}" hx-target="#guest-table" hx-swap="outerHTML" hx-push-url="true">Berikutnya →</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>

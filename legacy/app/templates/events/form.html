@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import field %}
+{% block title %}{{ "Edit" if event else "Buat" }} Event{% endblock %}
+{% block content %}
+{% if event %}
+  {% include "partials/event_header.html" %}
+{% else %}
+  <div>
+    <a href="{{ url_for('events.index') }}" class="text-sm text-slate-500 hover:text-slate-700">← Events</a>
+    <h1 class="mt-1 text-2xl font-bold text-slate-900">Buat Event</h1>
+  </div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" class="space-y-6" novalidate>
+  {{ form.hidden_tag() }}
+
+  <section class="card">
+    <div class="border-b border-slate-200 px-5 py-4"><h2 class="font-semibold">Informasi event</h2></div>
+    <div class="card-body grid gap-4 sm:grid-cols-2">
+      {{ field(form.organization_id) }}
+      {{ field(form.event_type) }}
+      {{ field(form.name, class_="sm:col-span-2", placeholder="BumiTech Annual Gathering 2026") }}
+      {{ field(form.slug, help="Kosongkan untuk dibuat otomatis dari nama event.") }}
+      {{ field(form.status, help="Undangan hanya bisa dibuka jika status Published.") }}
+      {{ field(form.description, class_="sm:col-span-2", rows=4) }}
+      {{ field(form.invitation_message, class_="sm:col-span-2", rows=2, help="Ditampilkan di halaman undangan, mis. kata sambutan.") }}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="border-b border-slate-200 px-5 py-4"><h2 class="font-semibold">Waktu</h2></div>
+    <div class="card-body grid gap-4 sm:grid-cols-4">
+      {{ field(form.event_date) }}
+      {{ field(form.start_time) }}
+      {{ field(form.end_time) }}
+      {{ field(form.timezone) }}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="border-b border-slate-200 px-5 py-4"><h2 class="font-semibold">Venue & kontak</h2></div>
+    <div class="card-body grid gap-4 sm:grid-cols-2">
+      {{ field(form.venue_name) }}
+      {{ field(form.dress_code) }}
+      {{ field(form.venue_address, class_="sm:col-span-2", rows=2) }}
+      {{ field(form.latitude, placeholder="-6.214620", help="Opsional. Untuk tombol Google Maps yang lebih akurat.") }}
+      {{ field(form.longitude, placeholder="106.807460") }}
+      {{ field(form.contact_name) }}
+      {{ field(form.contact_phone, placeholder="0812…") }}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="border-b border-slate-200 px-5 py-4"><h2 class="font-semibold">Tampilan & check-in</h2></div>
+    <div class="card-body grid gap-4 sm:grid-cols-2">
+      {{ field(form.invitation_template_id) }}
+      <div></div>
+      <div>
+        {{ field(form.cover_image) }}
+        {% if event and event.cover_image %}
+          <img src="{{ url_for('uploads.file', filename=event.cover_image) }}" class="mt-2 h-24 rounded-lg object-cover" alt="">
+          {{ field(form.remove_cover_image, class_="mt-2") }}
+        {% endif %}
+      </div>
+      <div>
+        {{ field(form.logo) }}
+        {% if event and event.logo %}
+          <img src="{{ url_for('uploads.file', filename=event.logo) }}" class="mt-2 h-16 rounded-lg object-contain" alt="">
+          {{ field(form.remove_logo, class_="mt-2") }}
+        {% endif %}
+      </div>
+      {{ field(form.allow_walk_in, class_="sm:col-span-2") }}
+    </div>
+  </section>
+
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex gap-2">
+      <button class="btn-primary">Simpan</button>
+      <a href="{{ url_for('events.show', event_id=event.id) if event else url_for('events.index') }}" class="btn-secondary">Batal</a>
+    </div>
+  </div>
+</form>
+
+{% if event and has_permission("event.delete") %}
+<form method="post" action="{{ url_for('events.delete', event_id=event.id) }}"
+      data-confirm="Hapus event ini beserta seluruh tamu, RSVP dan data check-in? Tindakan ini tidak dapat dibatalkan."
+      class="card flex flex-wrap items-center justify-between gap-3 p-5 ring-rose-200">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div>
+    <div class="font-semibold text-rose-700">Hapus event</div>
+    <div class="text-sm text-slate-500">Seluruh tamu, RSVP dan check-in untuk event ini akan ikut terhapus.</div>
+  </div>
+  <button class="btn-danger">Hapus event</button>
+</form>
+{% endif %}
+{% endblock %}

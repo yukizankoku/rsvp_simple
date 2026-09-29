@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import icon, rsvp_badge, invitation_badge %}
+{% block title %}{{ guest.name }}{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <a href="{{ url_for('guests.index', event_id=event.id) }}" class="text-sm text-slate-500 hover:text-slate-700">← Daftar tamu · {{ event.name }}</a>
+    <h1 class="mt-1 text-2xl font-bold text-slate-900">{{ guest.name }}</h1>
+    <div class="mt-1 flex flex-wrap items-center gap-2 text-sm">
+      <span class="font-mono text-slate-500">{{ guest.invitation_code }}</span>
+      {{ invitation_badge(guest.invitation_status) }} {{ rsvp_badge(guest.rsvp_status) }}
+      {% if guest.checkin %}<span class="badge-green">✓ Checked in</span>{% endif %}
+    </div>
+  </div>
+  <a href="{{ url_for('guests.edit', guest_id=guest.id) }}" class="btn-secondary">Edit</a>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <div class="space-y-6 lg:col-span-2">
+    <section class="card">
+      <div class="border-b border-slate-200 px-5 py-4"><h2 class="font-semibold">Link undangan</h2></div>
+      <div class="card-body space-y-4">
+        {% if guest.is_disabled %}
+          <div class="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">Undangan dinonaktifkan. Link tidak dapat dibuka oleh tamu.</div>
+        {% endif %}
+        <div class="flex gap-2">
+          <input type="text" readonly value="{{ invitation_link }}" class="input font-mono text-xs" onfocus="this.select()">
+          <button type="button" class="btn-secondary shrink-0" data-copy="{{ invitation_link }}">{{ icon("link", "h-4 w-4") }} Copy</button>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <a href="{{ invitation_link }}" target="_blank" rel="noopener" class="btn-secondary">Preview undangan</a>
+          {% if has_permission("invitation.send") and not guest.is_disabled %}
+          <form method="post" action="{{ url_for('guests.whatsapp', guest_id=guest.id) }}" target="_blank">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn-whatsapp">Kirim via WhatsApp</button>
+          </form>
+          <button type="button" class="btn-secondary" data-copy="{{ whatsapp_message }}">Copy pesan WA</button>
+          {% endif %}
+        </div>
+        <details class="rounded-lg bg-slate-50 p-3 text-sm">
+          <summary class="cursor-pointer font-medium text-slate-700">Pratinjau pesan WhatsApp</summary>
+          <pre class="mt-2 whitespace-pre-wrap font-sans text-slate-600">{{ whatsapp_message }}</pre>
+        </details>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="border-b border-slate-200 px-5 py-4"><h2 class="font-semibold">RSVP & check-in</h2></div>
+      <dl class="grid gap-4 p-5 text-sm sm:grid-cols-2">
+        <div><dt class="text-slate-500">Status RSVP</dt><dd class="mt-1">{{ rsvp_badge(guest.rsvp_status) }}</dd></div>
+        <div><dt class="text-slate-500">Jumlah orang</dt><dd class="mt-1 font-medium">{{ guest.rsvp.guest_count if guest.rsvp else "—" }} <span class="text-slate-400">(maks. {{ guest.max_guest_count or config.DEFAULT_MAX_GUEST_COUNT }})</span></dd></div>
+        <div><dt class="text-slate-500">Dikonfirmasi</dt><dd class="mt-1 font-medium">{{ guest.rsvp.confirmed_at|datetime_local(event.timezone) if guest.rsvp else "—" }}</dd></div>
+        <div><dt class="text-slate-500">Catatan tamu</dt><dd class="mt-1">{{ guest.rsvp.notes if guest.rsvp and guest.rsvp.notes else "—" }}</dd></div>
+        <div><dt class="text-slate-500">Check-in</dt><dd class="mt-1 font-medium">
+          {% if guest.checkin %}{{ guest.checkin.checked_in_at|datetime_local(event.timezone) }} · {{ guest.checkin.guest_count }} orang{% if guest.checkin.staff %} · oleh {{ guest.checkin.staff.name }}{% endif %}
+          {% else %}Belum{% endif %}</dd></div>
+        <div><dt class="text-slate-500">Dikirim / dibuka</dt><dd class="mt-1">{{ guest.sent_at|datetime_local(event.timezone) or "—" }} / {{ guest.opened_at|datetime_local(event.timezone) or "—" }}
+          <p class="text-xs text-slate-400">“Dibuka” hanya indikasi — pratinjau link/bot juga dapat membuka URL.</p></dd></div>
+      </dl>
+      {% if not guest.checkin and not guest.is_disabled and has_permission("checkin.perform") %}
+      <div class="border-t border-slate-200 px-5 py-4">
+        <form method="post" action="{{ url_for('guests.checkin', guest_id=guest.id) }}" data-confirm="Check-in {{ guest.name }} sekarang?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="next" value="{{ url_for('guests.show', guest_id=guest.id) }}">
+          <button class="btn-success">{{ icon("check", "h-4 w-4") }} Check-in manual</button>
+        </form>
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <div class="border-b border-slate-200 px-5 py-4"><h2 class="font-semibold">Data tamu</h2></div>
+      <dl class="grid gap-4 p-5 text-sm sm:grid-cols-2">
+        <div><dt class="text-slate-500">No. HP</dt><dd class="font-medium">{{ guest.phone or "—" }}</dd></div>
+        <div><dt class="text-slate-500">Email</dt><dd class="font-medium">{{ guest.email or "—" }}</dd></div>
+        <div><dt class="text-slate-500">Kategori</dt><dd class="font-medium">{{ guest.category }}</dd></div>
+        <div><dt class="text-slate-500">Perusahaan</dt><dd class="font-medium">{{ guest.company or "—" }}</dd></div>
+        <div><dt class="text-slate-500">Grup</dt><dd class="font-medium">{{ guest.group_name or "—" }}</dd></div>
+        <div><dt class="text-slate-500">Kode tamu</dt><dd class="font-medium">{{ guest.guest_code or "—" }}</dd></div>
+        <div class="sm:col-span-2"><dt class="text-slate-500">Catatan internal</dt><dd>{{ guest.notes or "—" }}</dd></div>
+      </dl>
+    </section>
+  </div>
+
+  <div class="space-y-6">
+    <section class="card">
+      <div class="border-b border-slate-200 px-5 py-4"><h2 class="font-semibold">QR check-in</h2></div>
+      <div class="card-body text-center">
+        <div class="mx-auto w-48 [&>svg]:h-auto [&>svg]:w-full">{{ qr_svg|safe }}</div>
+        <p class="mt-2 font-mono text-sm text-slate-500">{{ guest.invitation_code }}</p>
+        <div class="mt-4 grid gap-2">
+          <a href="{{ url_for('guests.qr_svg', guest_id=guest.id, download=1) }}" class="btn-secondary">Download QR (SVG)</a>
+          <a href="{{ url_for('guests.qr_print', guest_id=guest.id) }}" target="_blank" class="btn-secondary">Print QR</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="border-b border-slate-200 px-5 py-4"><h2 class="font-semibold">Keamanan link</h2></div>
+      <div class="card-body space-y-3">
+        {% if has_permission("invitation.send") %}
+        <form method="post" action="{{ url_for('guests.regenerate', guest_id=guest.id) }}"
+              data-confirm="Buat link & QR baru? Link dan QR lama akan langsung tidak berlaku.">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn-secondary w-full">Regenerate link & QR</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('guests.toggle', guest_id=guest.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="next" value="{{ url_for('guests.show', guest_id=guest.id) }}">
+          <button class="btn-secondary w-full">{{ "Aktifkan undangan" if guest.is_disabled else "Nonaktifkan undangan" }}</button>
+        </form>
+        <form method="post" action="{{ url_for('guests.delete', guest_id=guest.id) }}"
+              data-confirm="Hapus tamu {{ guest.name }} beserta RSVP & check-in?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn-danger w-full">Hapus tamu</button>
+        </form>
+        {% if guest.token_regenerated_at %}<p class="text-xs text-slate-500">Terakhir diregenerasi {{ guest.token_regenerated_at|datetime_local(event.timezone) }}</p>{% endif %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

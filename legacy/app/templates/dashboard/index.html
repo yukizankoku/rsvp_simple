@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import icon, event_status_badge %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-900">Halo, {{ current_user.name.split(" ")[0] }} 👋</h1>
+    <p class="text-sm text-slate-500">Ringkasan RSVP dari semua event yang dapat Anda akses (kecuali yang dibatalkan).</p>
+  </div>
+  {% if has_permission("event.create") %}
+  <a href="{{ url_for('events.create') }}" class="btn-primary">{{ icon("plus", "h-4 w-4") }} Buat Event</a>
+  {% endif %}
+</div>
+
+{% set poll_url = url_for('dashboard.stats') %}
+{% include "partials/stat_cards.html" %}
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <section class="card lg:col-span-2">
+    <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+      <h2 class="font-semibold">Event mendatang</h2>
+      <a href="{{ url_for('events.index') }}" class="text-sm font-medium text-brand-600 hover:underline">Semua event →</a>
+    </div>
+    <ul class="divide-y divide-slate-100">
+      {% for event in upcoming %}
+      <li>
+        <a href="{{ url_for('events.show', event_id=event.id) }}" class="flex items-center gap-4 px-5 py-4 hover:bg-slate-50">
+          <div class="w-14 shrink-0 rounded-lg bg-brand-50 py-1.5 text-center text-brand-700">
+            <div class="text-xs font-semibold uppercase">{{ event.event_date.strftime("%b") }}</div>
+            <div class="text-xl font-bold leading-none">{{ event.event_date.day }}</div>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="truncate font-medium text-slate-900">{{ event.name }}</div>
+            <div class="truncate text-sm text-slate-500">{{ event.venue_name or "Venue belum diisi" }} · {{ event.start_time|time_short }}</div>
+          </div>
+          {{ event_status_badge(event.status) }}
+        </a>
+      </li>
+      {% else %}
+      <li class="px-5 py-10 text-center text-sm text-slate-500">Belum ada event mendatang.</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="card">
+    <div class="border-b border-slate-200 px-5 py-4"><h2 class="font-semibold">Aksi cepat</h2></div>
+    <div class="grid gap-2 p-5">
+      {% if has_permission("event.create") %}
+      <a href="{{ url_for('events.create') }}" class="btn-secondary justify-start">{{ icon("calendar", "h-4 w-4") }} Buat event baru</a>
+      {% endif %}
+      <a href="{{ url_for('events.index') }}" class="btn-secondary justify-start">{{ icon("users", "h-4 w-4") }} Kelola tamu</a>
+      {% if has_permission("checkin.perform") %}
+      <a href="{{ url_for('checkin.index') }}" class="btn-secondary justify-start">{{ icon("qr", "h-4 w-4") }} Buka check-in</a>
+      {% endif %}
+    </div>
+    <div class="border-t border-slate-200 px-5 py-4 text-sm text-slate-500">
+      Total event: <span class="font-semibold text-slate-800">{{ events|length }}</span>
+    </div>
+  </section>
+</div>
+{% endblock %}

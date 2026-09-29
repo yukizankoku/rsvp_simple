@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import icon %}
+{% block title %}Check-in{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-end justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-900">Check-in</h1>
+    <p class="text-sm text-slate-500">Scan QR tamu atau masukkan kode undangan.</p>
+  </div>
+  <form method="get" class="flex items-center gap-2">
+    <select name="event_id" class="input min-w-[14rem]" onchange="this.form.submit()" aria-label="Pilih event">
+      <option value="">— Pilih event —</option>
+      {% for e in events %}<option value="{{ e.id }}" {{ "selected" if event and e.id == event.id }}>{{ e.name }} · {{ e.event_date.strftime("%d/%m/%Y") }}</option>{% endfor %}
+    </select>
+  </form>
+</div>
+
+{% if not event %}
+  <div class="card p-10 text-center text-slate-500">Pilih event terlebih dahulu untuk mulai check-in.</div>
+{% else %}
+<div class="grid gap-6 lg:grid-cols-5">
+  <div class="space-y-4 lg:col-span-3">
+    <section class="card overflow-hidden">
+      <div class="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+        <h2 class="font-semibold">Scanner</h2>
+        <div class="flex gap-2">
+          <button type="button" id="scan-start" class="btn-primary btn-sm">{{ icon("qr", "h-4 w-4") }} Mulai kamera</button>
+          <button type="button" id="scan-stop" class="btn-secondary btn-sm hidden">Stop</button>
+        </div>
+      </div>
+      <div id="reader" class="mx-auto w-full max-w-md bg-slate-900 [&_video]:!w-full"></div>
+      <p id="scan-hint" class="px-5 py-3 text-xs text-slate-500">Kamera membutuhkan HTTPS (atau localhost). Anda juga bisa memindai QR dengan kamera bawaan HP — link akan membuka halaman verifikasi.</p>
+    </section>
+
+    <form id="scan-form" method="post" action="{{ url_for('checkin.scan') }}" class="card space-y-3 p-5"
+          hx-post="{{ url_for('checkin.scan') }}" hx-target="#scan-result" hx-swap="innerHTML" hx-disabled-elt="find button">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="event_id" value="{{ event.id }}">
+      <label for="code" class="label">Kode undangan / token</label>
+      <div class="flex gap-2">
+        <input id="code" name="code" class="input font-mono uppercase" placeholder="INV-XXXXXX" autocomplete="off" autocapitalize="characters" required>
+        <button class="btn-primary shrink-0">Cek</button>
+      </div>
+      <label class="flex items-center gap-2 text-sm text-slate-600">
+        <input type="checkbox" name="auto_confirm" value="1" id="auto-confirm" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500">
+        Langsung check-in setelah scan (tanpa konfirmasi)
+      </label>
+    </form>
+
+    <div id="scan-result" aria-live="polite"></div>
+  </div>
+
+  <div class="lg:col-span-2">
+    <div hx-get="{{ url_for('checkin.recent', event_id=event.id) }}" hx-trigger="every 5s, checkin-done from:body" hx-swap="innerHTML">
+      {% include "checkin/_recent.html" %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if event %}
+<script src="{{ url_for('static', filename='js/vendor/html5-qrcode.min.js') }}"></script>
+<script>
+  (function () {
+    var startBtn = document.getElementById("scan-start");
+    var stopBtn = document.getElementById("scan-stop");
+    var form = document.getElementById("scan-form");
+    var input = document.getElementById("code");
+    var autoConfirm = document.getElementById("auto-confirm");
+    var scanner = null, lastCode = null, lastAt = 0;
+
+    try { autoConfirm.checked = localStorage.getItem("checkin-auto") === "1"; } catch (e) {}
+    autoConfirm.addEventListener("change", function () {
+      try { localStorage.setItem("checkin-auto", autoConfirm.checked ? "1" : "0"); } catch (e) {}
+    });
+
+    function onScan(text) {
+      var now = Date.now();
+      if (text === lastCode && now - lastAt < 4000) return; // ignore repeated frames
+      lastCode = text; lastAt = now;
+      input.value = text;
+      if (navigator.vibrate) navigator.vibrate(80);
+      htmx.trigger(form, "submit");
+    }
+
+    startBtn.addEventListener("click", function () {
+      scanner = scanner || new Html5Qrcode("reader");
+      scanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 240, height: 240 } }, onScan)
+        .then(function () { startBtn.classList.add("hidden"); stopBtn.classList.remove("hidden"); })
+        .catch(function (err) { alert("Kamera tidak dapat dibuka: " + err); });
+    });
+    stopBtn.addEventListener("click", function () {
+      if (scanner) scanner.stop().then(function () { stopBtn.classList.add("hidden"); startBtn.classList.remove("hidden"); });
+    });
+
+    document.body.addEventListener("htmx:afterSwap", function (e) {
+      if (e.detail.target.id === "scan-result") { input.value = ""; input.focus(); }
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

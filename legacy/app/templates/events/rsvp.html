@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import rsvp_badge %}
+{% block title %}RSVP · {{ event.name }}{% endblock %}
+{% block content %}
+{% include "partials/event_header.html" %}
+
+{% set poll_url = url_for('events.stats', event_id=event.id) %}
+{% include "partials/stat_cards.html" %}
+
+<section class="card overflow-hidden">
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+    <h2 class="font-semibold">Respon RSVP ({{ responses|length }})</h2>
+    <div class="flex gap-1 rounded-lg bg-slate-100 p-1 text-sm">
+      {% for key, label in [(None, "Semua"), ("attending", "Hadir"), ("not_attending", "Tidak hadir")] %}
+      <a href="{{ url_for('events.rsvp', event_id=event.id, status=key) }}"
+         class="rounded-md px-3 py-1 {{ 'bg-white font-medium shadow-sm' if status == key else 'text-slate-600 hover:text-slate-900' }}">{{ label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="table">
+      <thead><tr><th>Nama</th><th>Status</th><th>Jumlah</th><th>No. HP</th><th>Catatan</th><th>Dikonfirmasi</th></tr></thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for r in responses %}
+        <tr>
+          <td class="font-medium">
+            {% if has_permission("guest.manage") %}<a href="{{ url_for('guests.show', guest_id=r.guest_id) }}" class="hover:text-brand-700">{{ r.guest.name }}</a>{% else %}{{ r.guest.name }}{% endif %}
+          </td>
+          <td>{{ rsvp_badge(r.status) }}</td>
+          <td class="tabular-nums">{{ r.guest_count }}</td>
+          <td>{{ r.phone or "—" }}</td>
+          <td class="max-w-xs truncate" title="{{ r.notes or '' }}">{{ r.notes or "—" }}</td>
+          <td class="text-slate-500">{{ r.confirmed_at|datetime_local(event.timezone) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="py-10 text-center text-slate-500">Belum ada respon.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
