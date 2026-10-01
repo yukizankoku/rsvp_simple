@@ -6,13 +6,16 @@ export type Guest = {
   id: string;
   name: string;
   company: string;
-  attending: boolean;
+  /** null = added by the admin, guest has not answered yet */
+  attending: boolean | null;
   token: string;
   checked_in_at: string | null;
+  /** Set on a companion (+1): id of the guest who brought them */
+  plus_one_of: string | null;
   created_at: string;
 };
 
-const COLUMNS = "id, name, company, attending, token, checked_in_at, created_at";
+const COLUMNS = "id, name, company, attending, token, checked_in_at, plus_one_of, created_at";
 export const MAX_LEN = 120;
 
 /** Collapse whitespace so "  Budi   Santoso " is stored as "Budi Santoso". */
@@ -72,33 +75,103 @@ export async function findByToken(token: string) {
   return data;
 }
 
-/** Create the RSVP, or update attendance if this name + company already responded. Returns the token. */
-export async function saveRsvp(name: string, company: string, attending: boolean): Promise<string> {
-  const existing = await findByNameCompany(name, company);
-  if (existing) {
-    const { error } = await db()
-      .from("guests")
-      .update({ name, company, attending, updated_at: new Date().toISOString() })
-      .eq("id", existing.id);
-    if (error) throw error;
-    return existing.token;
+export async function findPlusOne(guestId: string) {
+  const { data, error } = await db()
+    .from("guests")
+    .select(COLUMNS)
+    .eq("plus_one_of", guestId)
+    .maybeSingle<Guest>();
+  if (error) throw error;
+  return data;
+}
+
+/** Insert a guest. Returns null if this name + company already exists. */
+export async function createGuest(
+  name: string,
+  company: string,
+  extra: { attending?: boolean; plus_one_of?: string } = {},
+) {
+  const { data, error } = await db()
+    .from("guests")
+    .insert({
+      name,
+      company,
+      name_key: toKey(name),
+      company_key: toKey(company),
+      attending: extra.attending ?? null,
+      plus_one_of: extra.plus_one_of ?? null,
+      token: newToken(),
+    })
+    .select(COLUMNS)
+    .maybeSingle<Guest>();
+  if (error?.code === "23505") return null;
+  if (error) throw error;
+  return data;
+}
+
+export type RsvpResult =
+  | { ok: true; token: string }
+  | { ok: false; reason: "not_found" | "plus_one_taken" | "plus_one_same" };
+
+/**
+ * Save a guest's answer. The guest is identified by the token of their personal link,
+ * or by name + company from the public form (created if new).
+ * `plusOneName` is the optional companion; empty removes an existing one.
+ */
+export async function saveRsvp(
+  who: { token: string } | { name: string; company: string },
+  attending: boolean,
+  plusOneName: string,
+): Promise<RsvpResult> {
+  let guest = "token" in who ? await findByToken(who.token) : await findByNameCompany(who.name, who.company);
+  if ("token" in who && !guest) return { ok: false, reason: "not_found" };
+  const name = guest?.name ?? ("name" in who ? who.name : "");
+  const company = guest?.company ?? ("company" in who ? who.company : "");
+
+  // A companion cannot bring a companion, and "tidak hadir" means no companion.
+  const plusOne = attending && !guest?.plus_one_of ? plusOneName : "";
+  if (plusOne) {
+    if (toKey(plusOne) === toKey(name)) return { ok: false, reason: "plus_one_same" };
+    const clash = await findByNameCompany(plusOne, company);
+    if (clash && (!guest || clash.plus_one_of !== guest.id)) return { ok: false, reason: "plus_one_taken" };
   }
 
-  const token = newToken();
-  const { error } = await db().from("guests").insert({
-    name,
-    company,
-    name_key: toKey(name),
-    company_key: toKey(company),
-    attending,
-    token,
-  });
-  if (error) {
-    // Two identical submissions at the same time: the other one won, so use its row.
-    if (error.code === "23505") return saveRsvp(name, company, attending);
-    throw error;
+  if (!guest) {
+    // If two identical submissions race, the other one created the row: use it.
+    guest = (await createGuest(name, company)) ?? (await findByNameCompany(name, company));
+    if (!guest) throw new Error("Could not create guest");
   }
-  return token;
+
+  const { error } = await db()
+    .from("guests")
+    .update({ attending, updated_at: new Date().toISOString() })
+    .eq("id", guest.id);
+  if (error) throw error;
+
+  if (!guest.plus_one_of) await syncPlusOne(guest, plusOne);
+  return { ok: true, token: guest.token };
+}
+
+async function syncPlusOne(guest: Guest, plusOneName: string) {
+  const existing = await findPlusOne(guest.id);
+  if (!plusOneName) {
+    // Keep a companion who is already inside the venue.
+    if (existing && !existing.checked_in_at) await deleteGuest(existing.id);
+    return;
+  }
+  if (!existing) {
+    const created = await createGuest(plusOneName, guest.company, { attending: true, plus_one_of: guest.id });
+    if (!created) throw new Error("Companion name was taken during save");
+    return;
+  }
+  if (existing.name !== plusOneName) {
+    // Renaming keeps the same row, so the companion's QR stays valid.
+    const { error } = await db()
+      .from("guests")
+      .update({ name: plusOneName, name_key: toKey(plusOneName), updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+    if (error) throw error;
+  }
 }
 
 export async function listGuests(): Promise<Guest[]> {
@@ -147,7 +220,7 @@ export async function checkIn(token: string, allowNotAttending = false): Promise
 }
 
 /** Returns false if another guest already has this name + company. */
-export async function updateGuest(id: string, name: string, company: string, attending: boolean) {
+export async function updateGuest(id: string, name: string, company: string, attending: boolean | null) {
   const { error } = await db()
     .from("guests")
     .update({
@@ -161,6 +234,13 @@ export async function updateGuest(id: string, name: string, company: string, att
     .eq("id", id);
   if (error?.code === "23505") return false;
   if (error) throw error;
+
+  // A companion is looked up under the same company as the guest who brought them.
+  const { error: plusOneError } = await db()
+    .from("guests")
+    .update({ company, company_key: toKey(company) })
+    .eq("plus_one_of", id);
+  if (plusOneError && plusOneError.code !== "23505") throw plusOneError;
   return true;
 }
 

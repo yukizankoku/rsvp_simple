@@ -1,15 +1,16 @@
 import Link from "next/link";
-import { AutoRefresh, CopyLink } from "@/components/AdminWidgets";
+import { AddGuestForm, AutoRefresh, CopyButton, CopyLink } from "@/components/AdminWidgets";
 import { formatDateTime } from "@/lib/format";
 import { listGuests, type Guest } from "@/lib/guests";
 import { cancelCheckIn, manualCheckIn } from "./actions";
 
 const FILTERS = {
   all: { label: "Semua", match: () => true },
-  yes: { label: "Hadir", match: (g: Guest) => g.attending },
-  no: { label: "Tidak hadir", match: (g: Guest) => !g.attending },
+  pending: { label: "Belum konfirmasi", match: (g: Guest) => g.attending === null },
+  yes: { label: "Hadir", match: (g: Guest) => g.attending === true },
+  no: { label: "Tidak hadir", match: (g: Guest) => g.attending === false },
   in: { label: "Sudah check-in", match: (g: Guest) => !!g.checked_in_at },
-  waiting: { label: "Belum check-in", match: (g: Guest) => g.attending && !g.checked_in_at },
+  waiting: { label: "Belum check-in", match: (g: Guest) => g.attending === true && !g.checked_in_at },
 } as const;
 type FilterKey = keyof typeof FILTERS;
 
@@ -22,14 +23,19 @@ export default async function AdminPage({
   const filter: FilterKey = f in FILTERS ? (f as FilterKey) : "all";
   const guests = await listGuests();
 
-  const attending = guests.filter((g) => g.attending).length;
+  // Companions (+1) are guests too, so they are included in every count.
+  const attending = guests.filter((g) => g.attending === true).length;
+  const pending = guests.filter((g) => g.attending === null).length;
   const checkedIn = guests.filter((g) => g.checked_in_at).length;
   const stats = [
     { label: "Konfirmasi hadir", value: attending, accent: true },
-    { label: "Tidak hadir", value: guests.length - attending },
+    { label: "Tidak hadir", value: guests.length - attending - pending },
+    { label: "Belum konfirmasi", value: pending },
     { label: "Sudah check-in", value: checkedIn, sub: attending ? `${Math.round((checkedIn / attending) * 100)}% dari yang hadir` : undefined },
-    { label: "Total respons", value: guests.length },
   ];
+
+  const byId = new Map(guests.map((g) => [g.id, g]));
+  const plusOneOf = new Map(guests.filter((g) => g.plus_one_of).map((g) => [g.plus_one_of, g]));
 
   const needle = q.trim().toLowerCase();
   const rows = guests.filter(
@@ -49,7 +55,8 @@ export default async function AdminPage({
   return (
     <div className="space-y-6">
       <AutoRefresh />
-      <CopyLink />
+      <AddGuestForm />
+      <CopyLink label="Link umum: tamu mengisi nama dan perusahaannya sendiri" />
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map((s) => (
@@ -84,7 +91,7 @@ export default async function AdminPage({
 
         {rows.length === 0 ? (
           <p className="p-10 text-center text-sm text-zinc-500">
-            {guests.length === 0 ? "Belum ada tamu yang mengisi RSVP." : "Tidak ada tamu yang cocok."}
+            {guests.length === 0 ? "Belum ada tamu. Tambahkan tamu di atas atau bagikan link umum." : "Tidak ada tamu yang cocok."}
           </p>
         ) : (
           <ul className="divide-y divide-zinc-100">
@@ -94,10 +101,20 @@ export default async function AdminPage({
                 <div className="min-w-0 flex-1">
                   <p className="font-medium break-words sm:truncate">{g.name}</p>
                   <p className="text-sm break-words text-zinc-500 sm:truncate">{g.company}</p>
+                  {g.plus_one_of && (
+                    <p className="text-xs break-words text-zinc-400 sm:truncate">
+                      Pendamping dari {byId.get(g.plus_one_of)?.name ?? "tamu"}
+                    </p>
+                  )}
+                  {plusOneOf.has(g.id) && (
+                    <p className="text-xs break-words text-zinc-400 sm:truncate">
+                      +1: {plusOneOf.get(g.id)!.name}
+                    </p>
+                  )}
                 </div>
                 <div className="flex min-h-10 items-center justify-between gap-3 sm:justify-end">
                   <GuestStatus guest={g} />
-                  <div className="flex shrink-0 items-center justify-end gap-1 sm:w-44">
+                  <div className="flex shrink-0 items-center justify-end gap-1 sm:w-48">
                     <Link href={`/admin/tamu/${g.id}`}
                       className="inline-flex min-h-10 items-center rounded-lg px-3 text-sm text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900">
                       Edit
@@ -109,6 +126,8 @@ export default async function AdminPage({
                           Batalkan
                         </button>
                       </form>
+                    ) : g.attending === null ? (
+                      <CopyButton path={`/u/${g.token}`} />
                     ) : g.attending ? (
                       <form action={manualCheckIn}>
                         <input type="hidden" name="token" value={g.token} />
@@ -139,6 +158,13 @@ function GuestStatus({ guest }: { guest: Guest }) {
           Check-in
         </span>
         <span className="text-xs text-zinc-400">{formatDateTime(guest.checked_in_at)}</span>
+      </span>
+    );
+  }
+  if (guest.attending === null) {
+    return (
+      <span className="shrink-0 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+        Belum konfirmasi
       </span>
     );
   }

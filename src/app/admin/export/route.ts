@@ -15,12 +15,14 @@ export async function GET() {
   if (!(await isAdmin())) return new NextResponse("Unauthorized", { status: 401 });
 
   const guests = await listGuests();
+  const names = new Map(guests.map((g) => [g.id, g.name]));
   const lines = [
-    ["Nama", "Perusahaan", "Kehadiran", "Check-in", "Waktu konfirmasi"],
+    ["Nama", "Perusahaan", "Kehadiran", "Pendamping dari", "Check-in", "Waktu dibuat"],
     ...guests.map((g) => [
       g.name,
       g.company,
-      g.attending ? "Hadir" : "Tidak hadir",
+      g.attending === null ? "Belum konfirmasi" : g.attending ? "Hadir" : "Tidak hadir",
+      g.plus_one_of ? names.get(g.plus_one_of) ?? "" : "",
       formatDateTime(g.checked_in_at),
       formatDateTime(g.created_at),
     ]),

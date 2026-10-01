@@ -1,27 +1,39 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { findByNameCompany, readNameCompany, saveRsvp } from "@/lib/guests";
+import { clean, findByNameCompany, readNameCompany, saveRsvp, type RsvpResult } from "@/lib/guests";
 import { validateRsvp, type FieldErrors } from "@/lib/validation";
 
 export type FormState = { error?: string; fieldErrors?: FieldErrors; values?: Record<string, string> };
 
+/** Handles both the public form (name + company typed by the guest) and personal links (token). */
 export async function submitRsvp(_prev: FormState, formData: FormData): Promise<FormState> {
+  const token = String(formData.get("token") ?? "");
   const { name, company, error } = readNameCompany(formData);
   const attendance = String(formData.get("attending") ?? "");
-  const values = { name, company, attending: attendance };
+  const plusOne = clean(formData.get("plus_one"));
+  const values = { name, company, attending: attendance, plus_one: plusOne };
+
   const fieldErrors = validateRsvp(formData);
   if (Object.keys(fieldErrors).length) return { fieldErrors, values };
-  if (error) return { error, values };
+  if (!token && error) return { error, values };
 
-  let token: string;
+  let result: RsvpResult;
   try {
-    token = await saveRsvp(name, company, attendance === "yes");
+    result = await saveRsvp(token ? { token } : { name, company }, attendance === "yes", plusOne);
   } catch (e) {
     console.error("saveRsvp failed", e);
     return { error: "Terjadi kesalahan. Silakan coba lagi.", values };
   }
-  redirect(`/tiket/${token}`);
+  if (!result.ok) {
+    if (result.reason === "not_found") return { error: "Undangan tidak ditemukan atau sudah dihapus.", values };
+    const message =
+      result.reason === "plus_one_same"
+        ? "Nama pendamping tidak boleh sama dengan nama Anda."
+        : "Nama pendamping sudah terdaftar sebagai tamu. Pendamping tidak perlu didaftarkan lagi.";
+    return { fieldErrors: { plus_one: message }, values };
+  }
+  redirect(`/tiket/${result.token}`);
 }
 
 export async function lookupTicket(_prev: FormState, formData: FormData): Promise<FormState> {

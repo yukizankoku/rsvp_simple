@@ -7,11 +7,15 @@ import { editGuest, removeGuest } from "@/app/admin/actions";
 import { Alert } from "./Alert";
 import { AttendanceField } from "./AttendanceField";
 
-type Props = { id: string; name: string; company: string; attending: boolean };
+type Props = { id: string; name: string; company: string; attending: boolean | null; plusOneName?: string };
 
-export function GuestEditForm({ id, name, company, attending }: Props) {
+export function GuestEditForm({ id, name, company, attending, plusOneName }: Props) {
   const [state, action, pending] = useActionState<FormState, FormData>(editGuest, {});
-  const v = state.values ?? { name, company, attending: attending ? "yes" : "no" };
+  const v: Record<string, string | undefined> = state.values ?? {
+    name,
+    company,
+    attending: attending === null ? undefined : attending ? "yes" : "no",
+  };
 
   return (
     <div className="space-y-4">
@@ -26,6 +30,11 @@ export function GuestEditForm({ id, name, company, attending }: Props) {
           <input id="company" name="company" required maxLength={120} defaultValue={v.company} className="input" />
         </div>
         <AttendanceField defaultValue={v.attending} />
+        {attending === null && (
+          <p className="-mt-2 text-xs text-zinc-500">
+            Tamu belum menjawab. Biarkan kosong jika tamu akan mengisi sendiri lewat link pribadinya.
+          </p>
+        )}
 
         {state.error && <Alert>{state.error}</Alert>}
 
@@ -40,7 +49,8 @@ export function GuestEditForm({ id, name, company, attending }: Props) {
       <form
         action={removeGuest}
         onSubmit={(e) => {
-          if (!confirm(`Hapus ${name} (${company})? QR code tamu ini tidak akan berlaku lagi.`)) e.preventDefault();
+          const extra = plusOneName ? ` Pendampingnya (${plusOneName}) juga ikut terhapus.` : "";
+          if (!confirm(`Hapus ${name} (${company})? QR code tamu ini tidak akan berlaku lagi.${extra}`)) e.preventDefault();
         }}
         className="card flex flex-col gap-3 p-6 sm:flex-row sm:items-center"
       >

@@ -134,8 +134,11 @@ export function Scanner() {
       )}
 
       {view.kind === "guest" && !view.guest.checked_in_at && !view.guest.attending && (
-        <ResultCard tone="amber" title="Konfirmasi: tidak hadir" guest={view.guest} onNext={next}>
-          Tamu ini sebelumnya menjawab tidak hadir.
+        <ResultCard tone="amber" guest={view.guest} onNext={next}
+          title={view.guest.attending === null ? "Belum konfirmasi kehadiran" : "Konfirmasi: tidak hadir"}>
+          {view.guest.attending === null
+            ? "Tamu ini belum mengisi konfirmasi kehadiran."
+            : "Tamu ini sebelumnya menjawab tidak hadir."}
           <button disabled={busy} onClick={() => doCheckIn(view.guest, true)} className="btn btn-primary mt-4 w-full">
             {busy ? "Menyimpan…" : "Tetap check-in"}
           </button>
