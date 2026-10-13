@@ -1,5 +1,14 @@
 -- Run once in Supabase → SQL Editor → New query → Run
 
+-- Random 7-character code for the short invitation link (/i/<code>).
+-- Similar-looking characters (0/O, 1/l/I) are left out so the link can be typed from paper.
+create or replace function public.gen_short_code() returns text
+language sql volatile as $$
+  select string_agg(
+    substr('ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789', 1 + floor(random() * 57)::int, 1), '')
+  from generate_series(1, 7)
+$$;
+
 create table if not exists public.guests (
   id            uuid primary key default gen_random_uuid(),
   name          text not null check (char_length(name) between 1 and 120),
@@ -7,9 +16,15 @@ create table if not exists public.guests (
   -- Normalized (lowercased, trimmed) copies used to find the guest again
   name_key      text not null,
   company_key   text not null,
+  -- Where the invitation and the QR code are sent. Optional when the admin adds a guest.
+  email         text check (email is null or char_length(email) <= 254),
   -- null = added by the admin, not answered yet
   attending     boolean,
   token         text not null unique,
+  -- Short invitation link: /i/<short_code>
+  short_code    text not null unique default public.gen_short_code(),
+  -- When the invitation email was last sent (null = never)
+  invited_at    timestamptz,
   checked_in_at timestamptz,
   -- Set on a companion (+1) row: the guest who brought them. Deleting the guest deletes the companion.
   plus_one_of   uuid references public.guests (id) on delete cascade,

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import type { FormState } from "@/app/actions";
-import { addGuest } from "@/app/admin/actions";
+import { addGuest, sendGuestEmail, type SendState } from "@/app/admin/actions";
 import { Alert } from "./Alert";
 
 /** Keeps the dashboard numbers fresh during the event. */
@@ -65,7 +65,8 @@ export function AddGuestForm() {
       <div>
         <p className="font-semibold">Tambah tamu</p>
         <p className="text-sm text-zinc-500">
-          Isi nama dan perusahaan, lalu salin link pribadinya dari daftar di bawah untuk dikirim ke tamu.
+          Isi nama, perusahaan dan email (opsional). Lalu kirim undangan lewat email, atau salin link pribadinya
+          dari daftar di bawah.
         </p>
       </div>
       <div className="flex flex-col gap-3 sm:flex-row">
@@ -73,12 +74,57 @@ export function AddGuestForm() {
           aria-label="Nama tamu" className="input sm:flex-1" autoFocus={!!v.added} />
         <input name="company" required maxLength={120} defaultValue={v.company} placeholder="Nama perusahaan"
           aria-label="Nama perusahaan" className="input sm:flex-1" />
+        <input name="email" type="email" maxLength={254} defaultValue={v.email} placeholder="Email (opsional)"
+          aria-label="Email" className="input sm:flex-1" />
         <button type="submit" disabled={pending} className="btn btn-primary">
           {pending ? "Menambah…" : "Tambah"}
         </button>
       </div>
       {state.error && <Alert>{state.error}</Alert>}
       {v.added && <p className="text-sm text-emerald-700">✓ {v.added} ditambahkan ke daftar.</p>}
+    </form>
+  );
+}
+
+/**
+ * Sends the invitation (or, with `kind="ticket"`, the QR code) to the guest's email.
+ * `compact` is the small version for a row in the guest list.
+ */
+export function SendEmailButton({
+  id,
+  kind = "invite",
+  label,
+  compact = false,
+}: {
+  id: string;
+  kind?: "invite" | "ticket";
+  label: string;
+  compact?: boolean;
+}) {
+  const [state, action, pending] = useActionState<SendState, FormData>(sendGuestEmail, {});
+  const [shown, setShown] = useState<SendState>({});
+
+  // Show the result for a few seconds, then go back to the normal label.
+  useEffect(() => {
+    setShown(state);
+    if (!state.ok && !state.error) return;
+    const t = setTimeout(() => setShown({}), state.error ? 6000 : 3000);
+    return () => clearTimeout(t);
+  }, [state]);
+
+  return (
+    <form action={action} className={compact ? "flex flex-col items-end" : "space-y-2"}>
+      <input type="hidden" name="id" value={id} />
+      <input type="hidden" name="kind" value={kind} />
+      <button type="submit" disabled={pending}
+        className={compact
+          ? "min-h-10 rounded-lg border border-zinc-300 px-4 text-sm font-medium hover:bg-zinc-50 disabled:opacity-60"
+          : "btn btn-ghost w-full"}>
+        {pending ? "Mengirim…" : shown.ok ? "Terkirim ✓" : label}
+      </button>
+      {shown.error && (compact
+        ? <span role="alert" className="mt-1 max-w-56 text-right text-xs text-red-600">{shown.error}</span>
+        : <Alert>{shown.error}</Alert>)}
     </form>
   );
 }

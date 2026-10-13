@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AddGuestForm, AutoRefresh, CopyButton, CopyLink } from "@/components/AdminWidgets";
+import { AddGuestForm, AutoRefresh, CopyButton, CopyLink, SendEmailButton } from "@/components/AdminWidgets";
 import { formatDateTime } from "@/lib/format";
 import { listGuests, type Guest } from "@/lib/guests";
 import { cancelCheckIn, manualCheckIn } from "./actions";
@@ -41,7 +41,10 @@ export default async function AdminPage({
   const rows = guests.filter(
     (g) =>
       FILTERS[filter].match(g) &&
-      (!needle || g.name.toLowerCase().includes(needle) || g.company.toLowerCase().includes(needle)),
+      (!needle ||
+        g.name.toLowerCase().includes(needle) ||
+        g.company.toLowerCase().includes(needle) ||
+        !!g.email?.includes(needle)),
   );
 
   const filterHref = (key: string) => {
@@ -72,10 +75,10 @@ export default async function AdminPage({
         <div className="flex flex-col gap-3 border-b border-zinc-200 p-4 sm:flex-row sm:items-center">
           <form className="flex-1">
             {filter !== "all" && <input type="hidden" name="f" value={filter} />}
-            <input name="q" defaultValue={q} placeholder="Cari nama atau perusahaan…"
+            <input name="q" defaultValue={q} placeholder="Cari nama, perusahaan atau email…"
               className="input" type="search" />
           </form>
-          <a href="/admin/export" className="btn btn-ghost w-full sm:w-auto">Export CSV</a>
+          <a href="/admin/export" className="btn btn-ghost w-full sm:w-auto">Export Excel</a>
         </div>
 
         <div className="flex gap-2 overflow-x-auto border-b border-zinc-200 px-4 py-3">
@@ -101,6 +104,10 @@ export default async function AdminPage({
                 <div className="min-w-0 flex-1">
                   <p className="font-medium break-words sm:truncate">{g.name}</p>
                   <p className="text-sm break-words text-zinc-500 sm:truncate">{g.company}</p>
+                  {g.email && <p className="text-xs break-all text-zinc-400 sm:truncate">{g.email}</p>}
+                  {g.invited_at && g.attending === null && (
+                    <p className="text-xs text-zinc-400">Undangan terkirim {formatDateTime(g.invited_at)}</p>
+                  )}
                   {g.plus_one_of && (
                     <p className="text-xs break-words text-zinc-400 sm:truncate">
                       Pendamping dari {byId.get(g.plus_one_of)?.name ?? "tamu"}
@@ -114,7 +121,7 @@ export default async function AdminPage({
                 </div>
                 <div className="flex min-h-10 items-center justify-between gap-3 sm:justify-end">
                   <GuestStatus guest={g} />
-                  <div className="flex shrink-0 items-center justify-end gap-1 sm:w-48">
+                  <div className="flex shrink-0 items-start justify-end gap-1 sm:min-w-48">
                     <Link href={`/admin/tamu/${g.id}`}
                       className="inline-flex min-h-10 items-center rounded-lg px-3 text-sm text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900">
                       Edit
@@ -127,7 +134,12 @@ export default async function AdminPage({
                         </button>
                       </form>
                     ) : g.attending === null ? (
-                      <CopyButton path={`/u/${g.token}`} />
+                      <>
+                        <CopyButton path={`/i/${g.short_code}`} />
+                        {g.email && (
+                          <SendEmailButton id={g.id} compact label={g.invited_at ? "Kirim ulang" : "Kirim undangan"} />
+                        )}
+                      </>
                     ) : g.attending ? (
                       <form action={manualCheckIn}>
                         <input type="hidden" name="token" value={g.token} />

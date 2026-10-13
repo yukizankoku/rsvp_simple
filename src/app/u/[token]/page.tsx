@@ -24,15 +24,16 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
           token,
           name: guest.name,
           company: guest.company,
+          email: guest.email ?? undefined,
           attending: answered ? (guest.attending ? "yes" : "no") : undefined,
           plusOne: plusOne?.name,
           canBringPlusOne: !isPlusOne,
         }}
       />
       {guest.attending && (
-        <p className="text-center text-sm text-zinc-600">
-          <Link href={`/tiket/${token}`} className="font-semibold text-brand-600 hover:underline">
-            Lihat QR code Anda
+        <p className="text-center text-sm text-brand-100/80">
+          <Link href={`/tiket/${token}`} className="font-semibold text-white hover:underline">
+            View your QR code
           </Link>
         </p>
       )}

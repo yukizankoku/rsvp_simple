@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CopyLink } from "@/components/AdminWidgets";
+import { CopyLink, SendEmailButton } from "@/components/AdminWidgets";
 import { GuestEditForm } from "@/components/GuestEditForm";
 import { formatDateTime } from "@/lib/format";
 import { findById, findPlusOne } from "@/lib/guests";
@@ -36,8 +36,24 @@ export default async function EditGuestPage({ params }: { params: Promise<{ id: 
           </p>
         )}
       </div>
-      {!guest.plus_one_of && <CopyLink path={`/u/${guest.token}`} label="Link pribadi tamu ini" />}
-      <GuestEditForm id={guest.id} name={guest.name} company={guest.company} attending={guest.attending}
+      {!guest.plus_one_of && <CopyLink path={`/i/${guest.short_code}`} label="Link pribadi tamu ini" />}
+      {!guest.plus_one_of && guest.email && (
+        <div className="card space-y-3 p-4">
+          <div>
+            <p className="font-medium">Kirim email ke {guest.email}</p>
+            <p className="text-sm text-zinc-500">
+              {guest.invited_at ? `Undangan terakhir dikirim ${formatDateTime(guest.invited_at)}.` : "Undangan belum pernah dikirim."}
+              {guest.attending && " QR code dikirim otomatis saat tamu konfirmasi hadir."}
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <SendEmailButton id={guest.id} label={guest.invited_at ? "Kirim ulang undangan" : "Kirim undangan"} />
+            {guest.attending && <SendEmailButton id={guest.id} kind="ticket" label="Kirim ulang QR code" />}
+          </div>
+        </div>
+      )}
+      <GuestEditForm id={guest.id} name={guest.name} company={guest.company} email={guest.email}
+        attending={guest.attending}
         plusOneName={plusOne?.name} />
       {guest.attending && (
         <Link href={`/tiket/${guest.token}`} target="_blank" className="block text-center text-sm text-brand-600 hover:underline">

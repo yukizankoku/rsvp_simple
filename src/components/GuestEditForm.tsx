@@ -7,13 +7,21 @@ import { editGuest, removeGuest } from "@/app/admin/actions";
 import { Alert } from "./Alert";
 import { AttendanceField } from "./AttendanceField";
 
-type Props = { id: string; name: string; company: string; attending: boolean | null; plusOneName?: string };
+type Props = {
+  id: string;
+  name: string;
+  company: string;
+  email: string | null;
+  attending: boolean | null;
+  plusOneName?: string;
+};
 
-export function GuestEditForm({ id, name, company, attending, plusOneName }: Props) {
+export function GuestEditForm({ id, name, company, email, attending, plusOneName }: Props) {
   const [state, action, pending] = useActionState<FormState, FormData>(editGuest, {});
   const v: Record<string, string | undefined> = state.values ?? {
     name,
     company,
+    email: email ?? "",
     attending: attending === null ? undefined : attending ? "yes" : "no",
   };
 
@@ -28,6 +36,11 @@ export function GuestEditForm({ id, name, company, attending, plusOneName }: Pro
         <div>
           <label htmlFor="company" className="label">Nama perusahaan</label>
           <input id="company" name="company" required maxLength={120} defaultValue={v.company} className="input" />
+        </div>
+        <div>
+          <label htmlFor="email" className="label">Email</label>
+          <input id="email" name="email" type="email" maxLength={254} defaultValue={v.email}
+            placeholder="nama@perusahaan.com" className="input" />
         </div>
         <AttendanceField defaultValue={v.attending} />
         {attending === null && (

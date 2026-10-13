@@ -1,22 +1,30 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { db } from "./supabase";
+import { EMAIL_PATTERN } from "./validation";
 
 export type Guest = {
   id: string;
   name: string;
   company: string;
+  email: string | null;
   /** null = added by the admin, guest has not answered yet */
   attending: boolean | null;
   token: string;
+  /** Short invitation link: /i/<short_code> */
+  short_code: string;
+  /** When the invitation email was last sent */
+  invited_at: string | null;
   checked_in_at: string | null;
   /** Set on a companion (+1): id of the guest who brought them */
   plus_one_of: string | null;
   created_at: string;
 };
 
-const COLUMNS = "id, name, company, attending, token, checked_in_at, plus_one_of, created_at";
+const COLUMNS =
+  "id, name, company, email, attending, token, short_code, invited_at, checked_in_at, plus_one_of, created_at";
 export const MAX_LEN = 120;
+const MAX_EMAIL_LEN = 254;
 
 /** Collapse whitespace so "  Budi   Santoso " is stored as "Budi Santoso". */
 export function clean(value: FormDataEntryValue | null) {
@@ -36,6 +44,14 @@ export function readNameCompany(formData: FormData) {
   if (!name || !company) error = "Nama dan nama perusahaan wajib diisi.";
   else if (name.length > MAX_LEN || company.length > MAX_LEN) error = "Nama atau perusahaan terlalu panjang.";
   return { name, company, error };
+}
+
+/** Read the email field. Empty is allowed here; callers decide whether it is required. */
+export function readEmail(formData: FormData) {
+  const email = clean(formData.get("email")).toLowerCase();
+  let error: string | undefined;
+  if (email && (email.length > MAX_EMAIL_LEN || !EMAIL_PATTERN.test(email))) error = "Format email tidak valid.";
+  return { email, error };
 }
 
 function newToken() {
@@ -75,6 +91,16 @@ export async function findByToken(token: string) {
   return data;
 }
 
+export async function findByShortCode(code: string) {
+  const { data, error } = await db()
+    .from("guests")
+    .select(COLUMNS)
+    .eq("short_code", code)
+    .maybeSingle<Guest>();
+  if (error) throw error;
+  return data;
+}
+
 export async function findPlusOne(guestId: string) {
   const { data, error } = await db()
     .from("guests")
@@ -89,7 +115,7 @@ export async function findPlusOne(guestId: string) {
 export async function createGuest(
   name: string,
   company: string,
-  extra: { attending?: boolean; plus_one_of?: string } = {},
+  extra: { attending?: boolean; plus_one_of?: string; email?: string } = {},
 ) {
   const { data, error } = await db()
     .from("guests")
@@ -98,6 +124,7 @@ export async function createGuest(
       company,
       name_key: toKey(name),
       company_key: toKey(company),
+      email: extra.email || null,
       attending: extra.attending ?? null,
       plus_one_of: extra.plus_one_of ?? null,
       token: newToken(),
@@ -110,7 +137,7 @@ export async function createGuest(
 }
 
 export type RsvpResult =
-  | { ok: true; token: string }
+  | { ok: true; guest: Guest }
   | { ok: false; reason: "not_found" | "plus_one_taken" | "plus_one_same" };
 
 /**
@@ -122,6 +149,7 @@ export async function saveRsvp(
   who: { token: string } | { name: string; company: string },
   attending: boolean,
   plusOneName: string,
+  email: string,
 ): Promise<RsvpResult> {
   let guest = "token" in who ? await findByToken(who.token) : await findByNameCompany(who.name, who.company);
   if ("token" in who && !guest) return { ok: false, reason: "not_found" };
@@ -142,14 +170,16 @@ export async function saveRsvp(
     if (!guest) throw new Error("Could not create guest");
   }
 
-  const { error } = await db()
+  const { data: saved, error } = await db()
     .from("guests")
-    .update({ attending, updated_at: new Date().toISOString() })
-    .eq("id", guest.id);
+    .update({ attending, email: email || guest.email, updated_at: new Date().toISOString() })
+    .eq("id", guest.id)
+    .select(COLUMNS)
+    .single<Guest>();
   if (error) throw error;
 
   if (!guest.plus_one_of) await syncPlusOne(guest, plusOne);
-  return { ok: true, token: guest.token };
+  return { ok: true, guest: saved };
 }
 
 async function syncPlusOne(guest: Guest, plusOneName: string) {
@@ -220,12 +250,19 @@ export async function checkIn(token: string, allowNotAttending = false): Promise
 }
 
 /** Returns false if another guest already has this name + company. */
-export async function updateGuest(id: string, name: string, company: string, attending: boolean | null) {
+export async function updateGuest(
+  id: string,
+  name: string,
+  company: string,
+  email: string,
+  attending: boolean | null,
+) {
   const { error } = await db()
     .from("guests")
     .update({
       name,
       company,
+      email: email || null,
       name_key: toKey(name),
       company_key: toKey(company),
       attending,
@@ -246,6 +283,11 @@ export async function updateGuest(id: string, name: string, company: string, att
 
 export async function deleteGuest(id: string) {
   const { error } = await db().from("guests").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function markInvited(id: string) {
+  const { error } = await db().from("guests").update({ invited_at: new Date().toISOString() }).eq("id", id);
   if (error) throw error;
 }
 

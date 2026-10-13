@@ -20,12 +20,12 @@ export default async function TicketPage({ params }: { params: Promise<{ token: 
         <EventHeader />
         <div className="card space-y-3 p-8 text-center">
           <p className="text-4xl">🙏</p>
-          <h2 className="text-lg font-semibold">Terima kasih, {guest.name}</h2>
+          <h2 className="text-lg font-semibold">Thank you, {guest.name}</h2>
           <p className="text-sm text-zinc-600">
-            Konfirmasi Anda sudah kami terima: <strong>tidak hadir</strong>. Jika rencana berubah,
-            Anda masih bisa mengubah konfirmasi.
+            We have received your response: <strong>not attending</strong>. If your plans change,
+            you can still update your response.
           </p>
-          <Link href={`/u/${token}`} className="btn btn-ghost mt-2 w-full">Ubah konfirmasi</Link>
+          <Link href={`/u/${token}`} className="btn btn-ghost mt-2 w-full">Update response</Link>
         </div>
       </PublicShell>
     );
@@ -44,28 +44,28 @@ export default async function TicketPage({ params }: { params: Promise<{ token: 
       <div role="alert" className="flex gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
         <span aria-hidden className="text-xl leading-6">⚠️</span>
         <div className="text-sm">
-          <p className="font-semibold">Simpan QR code {plusOne ? "di bawah ini" : "ini"}</p>
+          <p className="font-semibold">Save {plusOne ? "the QR codes below" : "this QR code"}</p>
           <p className="mt-0.5">
-            Unduh atau screenshot QR code, lalu <strong>tunjukkan kepada petugas saat registrasi acara</strong>.
-            {plusOne && " Setiap orang memakai QR code masing-masing."}
+            Download it or take a screenshot, then <strong>show it to the staff at event registration</strong>.
+            {plusOne && " Each person uses their own QR code."}
           </p>
         </div>
       </div>
 
-      <TicketCard guest={guest} label={host ? `Pendamping dari ${host.name}` : "✓ Kehadiran terkonfirmasi"} />
-      {plusOne && <TicketCard guest={plusOne} label="Pendamping (+1)" />}
+      <TicketCard guest={guest} label={host ? `Companion of ${host.name}` : "✓ Attendance confirmed"} />
+      {plusOne && <TicketCard guest={plusOne} label="Companion (+1)" />}
 
-      <div className="space-y-2 text-center text-xs text-zinc-500">
+      <div className="space-y-2 text-center text-xs text-brand-100/70">
         {!guest.plus_one_of && (
           <p>
-            Perlu mengubah kehadiran atau pendamping?{" "}
-            <Link href={`/u/${token}`} className="font-medium text-brand-600 hover:underline">Ubah konfirmasi</Link>
+            Need to change your attendance or companion?{" "}
+            <Link href={`/u/${token}`} className="font-medium text-white hover:underline">Update response</Link>
           </p>
         )}
         <p>
-          QR code bisa dibuka lagi lewat halaman{" "}
-          <Link href="/tiket" className="font-medium text-brand-600 hover:underline">Lihat QR code</Link>{" "}
-          dengan mengisi nama dan perusahaan Anda.
+          You can open your QR code again on the{" "}
+          <Link href="/tiket" className="font-medium text-white hover:underline">View QR code</Link>{" "}
+          page by entering your name and company.
         </p>
       </div>
     </PublicShell>

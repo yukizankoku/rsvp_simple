@@ -1,14 +1,14 @@
+import ExcelJS from "exceljs";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth";
-import { formatDateTime } from "@/lib/format";
 import { listGuests } from "@/lib/guests";
 
 export const dynamic = "force-dynamic";
 
-function csvCell(value: string) {
-  // Prefix formula characters so Excel doesn't execute them.
-  const safe = /^[=+\-@]/.test(value) ? `'${value}` : value;
-  return `"${safe.replace(/"/g, '""')}"`;
+// Excel dates have no time zone, so store the Jakarta wall-clock time (UTC+7, no daylight saving).
+const JAKARTA_OFFSET_MS = 7 * 60 * 60 * 1000;
+function jakartaDate(iso: string | null) {
+  return iso ? new Date(new Date(iso).getTime() + JAKARTA_OFFSET_MS) : null;
 }
 
 export async function GET() {
@@ -16,23 +16,45 @@ export async function GET() {
 
   const guests = await listGuests();
   const names = new Map(guests.map((g) => [g.id, g.name]));
-  const lines = [
-    ["Nama", "Perusahaan", "Kehadiran", "Pendamping dari", "Check-in", "Waktu dibuat"],
-    ...guests.map((g) => [
-      g.name,
-      g.company,
-      g.attending === null ? "Belum konfirmasi" : g.attending ? "Hadir" : "Tidak hadir",
-      g.plus_one_of ? names.get(g.plus_one_of) ?? "" : "",
-      formatDateTime(g.checked_in_at),
-      formatDateTime(g.created_at),
-    ]),
-  ].map((row) => row.map(csvCell).join(","));
 
-  // BOM so Excel opens UTF-8 correctly
-  return new NextResponse("﻿" + lines.join("\r\n"), {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Tamu", { views: [{ state: "frozen", ySplit: 1 }] });
+  const dateFormat = "dd/mm/yyyy hh:mm";
+  sheet.columns = [
+    { header: "Nama", key: "name", width: 30 },
+    { header: "Perusahaan", key: "company", width: 30 },
+    { header: "Email", key: "email", width: 32 },
+    { header: "Kehadiran", key: "attending", width: 18 },
+    { header: "Pendamping dari", key: "plusOneOf", width: 30 },
+    { header: "Undangan dikirim", key: "invited", width: 18, style: { numFmt: dateFormat } },
+    { header: "Check-in", key: "checkedIn", width: 18, style: { numFmt: dateFormat } },
+    { header: "Waktu dibuat", key: "created", width: 18, style: { numFmt: dateFormat } },
+  ];
+
+  // Strings are written as text cells, never as formulas, so values like "=..." are safe.
+  for (const g of guests) {
+    sheet.addRow({
+      name: g.name,
+      company: g.company,
+      email: g.email ?? "",
+      attending: g.attending === null ? "Belum konfirmasi" : g.attending ? "Hadir" : "Tidak hadir",
+      plusOneOf: g.plus_one_of ? names.get(g.plus_one_of) ?? "" : "",
+      invited: jakartaDate(g.invited_at),
+      checkedIn: jakartaDate(g.checked_in_at),
+      created: jakartaDate(g.created_at),
+    });
+  }
+
+  const header = sheet.getRow(1);
+  header.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1660F5" } };
+  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: sheet.columns.length } };
+
+  const file = await workbook.xlsx.writeBuffer();
+  return new NextResponse(file as ArrayBuffer, {
     headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="rsvp-${new Date().toISOString().slice(0, 10)}.csv"`,
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="rsvp-${new Date().toISOString().slice(0, 10)}.xlsx"`,
     },
   });
 }

@@ -7,14 +7,14 @@ const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakart
 
 export async function generateMetadata(): Promise<Metadata> {
   const event = eventInfo();
-  return { title: `RSVP · ${event.name}`, description: `Konfirmasi kehadiran ${event.name}` };
+  return { title: `RSVP · ${event.name}`, description: `Confirm your attendance at ${event.name}` };
 }
 
-export const viewport: Viewport = { themeColor: "#4f46e5" };
+export const viewport: Viewport = { themeColor: "#0b1120" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id" className={jakarta.variable}>
+    <html lang="en" className={jakarta.variable}>
       <body className="min-h-dvh font-sans">{children}</body>
     </html>
   );

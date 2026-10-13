@@ -7,15 +7,15 @@ export default function LookupPage() {
     <PublicShell>
       <EventHeader />
       <div className="text-center">
-        <h2 className="text-lg font-semibold">Ambil QR code Anda</h2>
-        <p className="mt-1 text-sm text-zinc-600">
-          Isi nama dan perusahaan yang sama seperti saat konfirmasi.
+        <h2 className="text-lg font-semibold text-white">Get your QR code</h2>
+        <p className="mt-1 text-sm text-brand-100/80">
+          Enter the same name and company you used when you confirmed.
         </p>
       </div>
       <LookupForm />
-      <p className="text-center text-sm text-zinc-600">
-        Belum konfirmasi?{" "}
-        <Link href="/" className="font-semibold text-brand-600 hover:underline">Isi RSVP</Link>
+      <p className="text-center text-sm text-brand-100/80">
+        Not confirmed yet?{" "}
+        <Link href="/" className="font-semibold text-white hover:underline">RSVP now</Link>
       </p>
     </PublicShell>
   );
