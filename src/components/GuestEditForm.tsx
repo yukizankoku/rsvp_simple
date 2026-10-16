@@ -6,22 +6,27 @@ import type { FormState } from "@/app/actions";
 import { editGuest, removeGuest } from "@/app/admin/actions";
 import { Alert } from "./Alert";
 import { AttendanceField } from "./AttendanceField";
+import { confirmDelete } from "./DeleteGuestButton";
 
 type Props = {
   id: string;
   name: string;
   company: string;
   email: string | null;
+  phone: string | null;
   attending: boolean | null;
   plusOneName?: string;
+  /** A companion's company follows the guest who brought them, so it can't be edited here. */
+  isPlusOne?: boolean;
 };
 
-export function GuestEditForm({ id, name, company, email, attending, plusOneName }: Props) {
+export function GuestEditForm({ id, name, company, email, phone, attending, plusOneName, isPlusOne = false }: Props) {
   const [state, action, pending] = useActionState<FormState, FormData>(editGuest, {});
   const v: Record<string, string | undefined> = state.values ?? {
     name,
     company,
     email: email ?? "",
+    phone: phone ?? "",
     attending: attending === null ? undefined : attending ? "yes" : "no",
   };
 
@@ -35,12 +40,25 @@ export function GuestEditForm({ id, name, company, email, attending, plusOneName
         </div>
         <div>
           <label htmlFor="company" className="label">Nama perusahaan</label>
-          <input id="company" name="company" required maxLength={120} defaultValue={v.company} className="input" />
+          <input id="company" name="company" required maxLength={120} defaultValue={v.company}
+            readOnly={isPlusOne} className={`input ${isPlusOne ? "bg-zinc-50 text-zinc-500" : ""}`} />
+          {isPlusOne ? (
+            <p className="mt-1.5 text-xs text-zinc-500">
+              Pendamping mengikuti perusahaan tamu yang membawanya. Ubah perusahaan di halaman tamu tersebut.
+            </p>
+          ) : plusOneName && (
+            <p className="mt-1.5 text-xs text-zinc-500">Pendamping ({plusOneName}) ikut pindah jika perusahaan diubah.</p>
+          )}
         </div>
         <div>
           <label htmlFor="email" className="label">Email</label>
           <input id="email" name="email" type="email" maxLength={254} defaultValue={v.email}
             placeholder="nama@perusahaan.com" className="input" />
+        </div>
+        <div>
+          <label htmlFor="phone" className="label">Nomor telepon</label>
+          <input id="phone" name="phone" type="tel" maxLength={30} defaultValue={v.phone}
+            placeholder="+62 812-3456-7890" className="input" />
         </div>
         <AttendanceField defaultValue={v.attending} />
         {attending === null && (
@@ -62,8 +80,7 @@ export function GuestEditForm({ id, name, company, email, attending, plusOneName
       <form
         action={removeGuest}
         onSubmit={(e) => {
-          const extra = plusOneName ? ` Pendampingnya (${plusOneName}) juga ikut terhapus.` : "";
-          if (!confirm(`Hapus ${name} (${company})? QR code tamu ini tidak akan berlaku lagi.${extra}`)) e.preventDefault();
+          if (!confirmDelete(name, company, plusOneName)) e.preventDefault();
         }}
         className="card flex flex-col gap-3 p-6 sm:flex-row sm:items-center"
       >

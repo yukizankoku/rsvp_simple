@@ -1,5 +1,15 @@
 import Link from "next/link";
-import { AddGuestForm, AutoRefresh, CopyButton, CopyLink, SendEmailButton } from "@/components/AdminWidgets";
+import {
+  AddGuestForm,
+  AutoRefresh,
+  BlastEmailCard,
+  CopyButton,
+  CopyLink,
+  ImportGuestsForm,
+  SendEmailButton,
+} from "@/components/AdminWidgets";
+import { DeleteGuestButton } from "@/components/DeleteGuestButton";
+import { emailConfigured } from "@/lib/email";
 import { formatDateTime } from "@/lib/format";
 import { listGuests, type Guest } from "@/lib/guests";
 import { cancelCheckIn, manualCheckIn } from "./actions";
@@ -13,6 +23,9 @@ const FILTERS = {
   waiting: { label: "Belum check-in", match: (g: Guest) => g.attending === true && !g.checked_in_at },
 } as const;
 type FilterKey = keyof typeof FILTERS;
+
+// Room for the server actions on this page, e.g. a batch of invitation emails over a slow SMTP server.
+export const maxDuration = 60;
 
 export default async function AdminPage({
   searchParams,
@@ -34,17 +47,23 @@ export default async function AdminPage({
     { label: "Sudah check-in", value: checkedIn, sub: attending ? `${Math.round((checkedIn / attending) * 100)}% dari yang hadir` : undefined },
   ];
 
+  // Invitations go to guests who can still answer: not a companion, has an email, no answer yet.
+  const invitable = guests.filter((g) => !g.plus_one_of && g.email && g.attending === null);
+
   const byId = new Map(guests.map((g) => [g.id, g]));
   const plusOneOf = new Map(guests.filter((g) => g.plus_one_of).map((g) => [g.plus_one_of, g]));
 
   const needle = q.trim().toLowerCase();
+  const needleDigits = /^[\d\s()+.-]+$/.test(needle) ? needle.replace(/\D/g, "") : "";
   const rows = guests.filter(
     (g) =>
       FILTERS[filter].match(g) &&
       (!needle ||
         g.name.toLowerCase().includes(needle) ||
         g.company.toLowerCase().includes(needle) ||
-        !!g.email?.includes(needle)),
+        !!g.email?.includes(needle) ||
+        // Match "0812 3456" against "0812-3456-..." by comparing digits only.
+        (!!needleDigits && !!g.phone?.replace(/\D/g, "").includes(needleDigits))),
   );
 
   const filterHref = (key: string) => {
@@ -59,6 +78,12 @@ export default async function AdminPage({
     <div className="space-y-6">
       <AutoRefresh />
       <AddGuestForm />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ImportGuestsForm />
+        <BlastEmailCard configured={emailConfigured()}
+          newIds={invitable.filter((g) => !g.invited_at).map((g) => g.id)}
+          pendingIds={invitable.map((g) => g.id)} />
+      </div>
       <CopyLink label="Link umum: tamu mengisi nama dan perusahaannya sendiri" />
 
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -75,7 +100,7 @@ export default async function AdminPage({
         <div className="flex flex-col gap-3 border-b border-zinc-200 p-4 sm:flex-row sm:items-center">
           <form className="flex-1">
             {filter !== "all" && <input type="hidden" name="f" value={filter} />}
-            <input name="q" defaultValue={q} placeholder="Cari nama, perusahaan atau email…"
+            <input name="q" defaultValue={q} placeholder="Cari nama, perusahaan, email atau telepon…"
               className="input" type="search" />
           </form>
           <a href="/admin/export" className="btn btn-ghost w-full sm:w-auto">Export Excel</a>
@@ -104,7 +129,11 @@ export default async function AdminPage({
                 <div className="min-w-0 flex-1">
                   <p className="font-medium break-words sm:truncate">{g.name}</p>
                   <p className="text-sm break-words text-zinc-500 sm:truncate">{g.company}</p>
-                  {g.email && <p className="text-xs break-all text-zinc-400 sm:truncate">{g.email}</p>}
+                  {(g.email || g.phone) && (
+                    <p className="text-xs break-all text-zinc-400 sm:truncate">
+                      {[g.email, g.phone].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
                   {g.invited_at && g.attending === null && (
                     <p className="text-xs text-zinc-400">Undangan terkirim {formatDateTime(g.invited_at)}</p>
                   )}
@@ -121,7 +150,7 @@ export default async function AdminPage({
                 </div>
                 <div className="flex min-h-10 items-center justify-between gap-3 sm:justify-end">
                   <GuestStatus guest={g} />
-                  <div className="flex shrink-0 items-start justify-end gap-1 sm:min-w-48">
+                  <div className="flex shrink-0 flex-wrap items-start justify-end gap-1 sm:min-w-48">
                     <Link href={`/admin/tamu/${g.id}`}
                       className="inline-flex min-h-10 items-center rounded-lg px-3 text-sm text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900">
                       Edit
@@ -148,6 +177,8 @@ export default async function AdminPage({
                         </button>
                       </form>
                     ) : null}
+                    <DeleteGuestButton id={g.id} name={g.name} company={g.company}
+                      plusOneName={plusOneOf.get(g.id)?.name} />
                   </div>
                 </div>
               </li>

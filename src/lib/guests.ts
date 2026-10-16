@@ -1,13 +1,14 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { db } from "./supabase";
-import { EMAIL_PATTERN } from "./validation";
+import { EMAIL_PATTERN, isValidPhone } from "./validation";
 
 export type Guest = {
   id: string;
   name: string;
   company: string;
   email: string | null;
+  phone: string | null;
   /** null = added by the admin, guest has not answered yet */
   attending: boolean | null;
   token: string;
@@ -22,7 +23,7 @@ export type Guest = {
 };
 
 const COLUMNS =
-  "id, name, company, email, attending, token, short_code, invited_at, checked_in_at, plus_one_of, created_at";
+  "id, name, company, email, phone, attending, token, short_code, invited_at, checked_in_at, plus_one_of, created_at";
 export const MAX_LEN = 120;
 const MAX_EMAIL_LEN = 254;
 
@@ -31,12 +32,12 @@ export function clean(value: FormDataEntryValue | null) {
   return String(value ?? "").normalize("NFKC").trim().replace(/\s+/g, " ");
 }
 
-/** Key used to match a guest again regardless of case and spacing. */
+/** Compare names regardless of case and spacing. */
 export function toKey(value: string) {
   return clean(value).toLowerCase();
 }
 
-/** Read and validate the name + company fields shared by the RSVP, lookup and edit forms. */
+/** Read and validate the name + company fields shared by the RSVP and admin forms. */
 export function readNameCompany(formData: FormData) {
   const name = clean(formData.get("name"));
   const company = clean(formData.get("company"));
@@ -54,16 +55,22 @@ export function readEmail(formData: FormData) {
   return { email, error };
 }
 
+/** Read the phone field. Empty is allowed. */
+export function readPhone(formData: FormData) {
+  const phone = clean(formData.get("phone"));
+  return { phone, error: phone && !isValidPhone(phone) ? "Format nomor telepon tidak valid." : undefined };
+}
+
 function newToken() {
   return randomBytes(16).toString("base64url");
 }
 
-export async function findByNameCompany(name: string, company: string) {
+/** Emails are stored lowercased (see `readEmail`), so an exact match ignores case. */
+export async function findByEmail(email: string) {
   const { data, error } = await db()
     .from("guests")
     .select(COLUMNS)
-    .eq("name_key", toKey(name))
-    .eq("company_key", toKey(company))
+    .eq("email", email.toLowerCase())
     .maybeSingle<Guest>();
   if (error) throw error;
   return data;
@@ -111,20 +118,19 @@ export async function findPlusOne(guestId: string) {
   return data;
 }
 
-/** Insert a guest. Returns null if this name + company already exists. */
+/** Insert a guest. Returns null if another guest already has this email. */
 export async function createGuest(
   name: string,
   company: string,
-  extra: { attending?: boolean; plus_one_of?: string; email?: string } = {},
+  extra: { attending?: boolean; plus_one_of?: string; email?: string; phone?: string } = {},
 ) {
   const { data, error } = await db()
     .from("guests")
     .insert({
       name,
       company,
-      name_key: toKey(name),
-      company_key: toKey(company),
       email: extra.email || null,
+      phone: extra.phone || null,
       attending: extra.attending ?? null,
       plus_one_of: extra.plus_one_of ?? null,
       token: newToken(),
@@ -136,13 +142,35 @@ export async function createGuest(
   return data;
 }
 
+export type NewGuest = { name: string; company: string; email: string; phone: string };
+
+/** Insert many guests at once (Excel import). Throws if an email is already taken. */
+export async function createGuests(guests: NewGuest[]) {
+  const chunk = 500;
+  for (let i = 0; i < guests.length; i += chunk) {
+    const { error } = await db()
+      .from("guests")
+      .insert(
+        guests.slice(i, i + chunk).map((g) => ({
+          name: g.name,
+          company: g.company,
+          email: g.email || null,
+          phone: g.phone || null,
+          token: newToken(),
+        })),
+      );
+    if (error) throw error;
+  }
+}
+
 export type RsvpResult =
   | { ok: true; guest: Guest }
-  | { ok: false; reason: "not_found" | "plus_one_taken" | "plus_one_same" };
+  | { ok: false; reason: "not_found" | "plus_one_same" | "email_taken" };
 
 /**
  * Save a guest's answer. The guest is identified by the token of their personal link,
- * or by name + company from the public form (created if new).
+ * or by email from the public form (created if new). Name + company can't identify a guest:
+ * two different people may share both.
  * `plusOneName` is the optional companion; empty removes an existing one.
  */
 export async function saveRsvp(
@@ -150,32 +178,32 @@ export async function saveRsvp(
   attending: boolean,
   plusOneName: string,
   email: string,
+  phone: string,
 ): Promise<RsvpResult> {
-  let guest = "token" in who ? await findByToken(who.token) : await findByNameCompany(who.name, who.company);
+  let guest = "token" in who ? await findByToken(who.token) : await findByEmail(email);
   if ("token" in who && !guest) return { ok: false, reason: "not_found" };
+  // An existing guest keeps the name and company already on record.
   const name = guest?.name ?? ("name" in who ? who.name : "");
   const company = guest?.company ?? ("company" in who ? who.company : "");
 
   // A companion cannot bring a companion, and "tidak hadir" means no companion.
   const plusOne = attending && !guest?.plus_one_of ? plusOneName : "";
-  if (plusOne) {
-    if (toKey(plusOne) === toKey(name)) return { ok: false, reason: "plus_one_same" };
-    const clash = await findByNameCompany(plusOne, company);
-    if (clash && (!guest || clash.plus_one_of !== guest.id)) return { ok: false, reason: "plus_one_taken" };
-  }
+  if (plusOne && toKey(plusOne) === toKey(name)) return { ok: false, reason: "plus_one_same" };
 
   if (!guest) {
     // If two identical submissions race, the other one created the row: use it.
-    guest = (await createGuest(name, company)) ?? (await findByNameCompany(name, company));
+    guest = (await createGuest(name, company, { email, phone })) ?? (await findByEmail(email));
     if (!guest) throw new Error("Could not create guest");
   }
 
   const { data: saved, error } = await db()
     .from("guests")
-    .update({ attending, email: email || guest.email, updated_at: new Date().toISOString() })
+    .update({ attending, email: email || guest.email, phone: phone || guest.phone, updated_at: new Date().toISOString() })
     .eq("id", guest.id)
     .select(COLUMNS)
     .single<Guest>();
+  // A personal link may change the email to one another guest already uses.
+  if (error?.code === "23505") return { ok: false, reason: "email_taken" };
   if (error) throw error;
 
   if (!guest.plus_one_of) await syncPlusOne(guest, plusOne);
@@ -198,7 +226,7 @@ async function syncPlusOne(guest: Guest, plusOneName: string) {
     // Renaming keeps the same row, so the companion's QR stays valid.
     const { error } = await db()
       .from("guests")
-      .update({ name: plusOneName, name_key: toKey(plusOneName), updated_at: new Date().toISOString() })
+      .update({ name: plusOneName, updated_at: new Date().toISOString() })
       .eq("id", existing.id);
     if (error) throw error;
   }
@@ -249,36 +277,39 @@ export async function checkIn(token: string, allowNotAttending = false): Promise
   return { status: "ok", guest: data };
 }
 
-/** Returns false if another guest already has this name + company. */
+export type UpdateResult =
+  | { ok: true }
+  | { ok: false; reason: "not_found" | "email_taken" };
+
+/**
+ * Save the admin's edit. A companion always has the same company as the guest who brought them:
+ * changing the guest's company moves the companion too, and a companion's own company can't be changed.
+ */
 export async function updateGuest(
   id: string,
   name: string,
   company: string,
   email: string,
+  phone: string,
   attending: boolean | null,
-) {
+): Promise<UpdateResult> {
+  const guest = await findById(id);
+  if (!guest) return { ok: false, reason: "not_found" };
+  if (guest.plus_one_of) company = guest.company;
+
   const { error } = await db()
     .from("guests")
-    .update({
-      name,
-      company,
-      email: email || null,
-      name_key: toKey(name),
-      company_key: toKey(company),
-      attending,
-      updated_at: new Date().toISOString(),
-    })
+    .update({ name, company, email: email || null, phone: phone || null, attending, updated_at: new Date().toISOString() })
     .eq("id", id);
-  if (error?.code === "23505") return false;
+  if (error?.code === "23505") return { ok: false, reason: "email_taken" };
   if (error) throw error;
 
-  // A companion is looked up under the same company as the guest who brought them.
   const { error: plusOneError } = await db()
     .from("guests")
-    .update({ company, company_key: toKey(company) })
+    .update({ company, updated_at: new Date().toISOString() })
     .eq("plus_one_of", id);
-  if (plusOneError && plusOneError.code !== "23505") throw plusOneError;
-  return true;
+  if (plusOneError) throw plusOneError;
+  return { ok: true };
 }
 
 export async function deleteGuest(id: string) {

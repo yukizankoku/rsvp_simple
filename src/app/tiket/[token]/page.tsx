@@ -65,7 +65,7 @@ export default async function TicketPage({ params }: { params: Promise<{ token: 
         <p>
           You can open your QR code again on the{" "}
           <Link href="/tiket" className="font-medium text-white hover:underline">View QR code</Link>{" "}
-          page by entering your name and company.
+          page by entering the email used to confirm.
         </p>
       </div>
     </PublicShell>

@@ -13,6 +13,7 @@ export type Invite = {
   name: string;
   company: string;
   email?: string;
+  phone?: string;
   attending?: string;
   plusOne?: string;
   /** A companion cannot bring a companion of their own. */
@@ -23,7 +24,7 @@ export function RsvpForm({ invite }: { invite?: Invite }) {
   const [state, action, pending] = useActionState<FormState, FormData>(submitRsvp, {});
   const [errors, setErrors] = useState<FieldErrors>({});
   const v: Record<string, string | undefined> =
-    state.values ?? { email: invite?.email, attending: invite?.attending, plus_one: invite?.plusOne };
+    state.values ?? { email: invite?.email, phone: invite?.phone, attending: invite?.attending, plus_one: invite?.plusOne };
   const [attending, setAttending] = useState(v.attending);
   // The companion's name field only appears after the guest ticks the checkbox.
   const [hasPlusOne, setHasPlusOne] = useState(!!v.plus_one);
@@ -69,7 +70,7 @@ export function RsvpForm({ invite }: { invite?: Invite }) {
           <input type="hidden" name="token" value={invite.token} />
           <input type="hidden" name="name" value={invite.name} />
           <input type="hidden" name="company" value={invite.company} />
-          <p className="text-sm text-brand-200">Dear</p>
+          <p className="text-sm text-brand-200">Confirming for</p>
           <p className="text-xl font-bold break-words text-white">{invite.name}</p>
           <p className="break-words text-brand-100/80">{invite.company}</p>
         </div>
@@ -100,6 +101,16 @@ export function RsvpForm({ invite }: { invite?: Invite }) {
         {errors.email
           ? <FieldError id="email-error" message={errors.email} />
           : <p id="email-hint" className="mt-1.5 text-xs text-brand-100/70">Your QR code will be sent to this email.</p>}
+      </div>
+
+      <div>
+        <label htmlFor="phone" className="label">
+          Phone number <span className="font-normal text-zinc-500 on-dark:text-brand-100/70">(optional)</span>
+        </label>
+        <input id="phone" name="phone" type="tel" maxLength={30} autoComplete="tel" inputMode="tel"
+          defaultValue={v.phone} placeholder="+62 812-3456-7890" className="input"
+          aria-invalid={!!errors.phone} aria-describedby={errors.phone ? "phone-error" : undefined} />
+        <FieldError id="phone-error" message={errors.phone} />
       </div>
 
       <AttendanceField defaultValue={v.attending} error={errors.attending} lang="en" />

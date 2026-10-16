@@ -11,14 +11,9 @@ export function LookupForm() {
   return (
     <form key={JSON.stringify(v)} action={action} className="card space-y-5 p-6">
       <div>
-        <label htmlFor="name" className="label">Full name</label>
-        <input id="name" name="name" required maxLength={120} autoComplete="name"
-          defaultValue={v.name} className="input" />
-      </div>
-      <div>
-        <label htmlFor="company" className="label">Company name</label>
-        <input id="company" name="company" required maxLength={120} autoComplete="organization"
-          defaultValue={v.company} className="input" />
+        <label htmlFor="email" className="label">Email</label>
+        <input id="email" name="email" type="email" required maxLength={254} autoComplete="email"
+          defaultValue={v.email} placeholder="name@company.com" className="input" />
       </div>
       {state.error && <Alert>{state.error}</Alert>}
       <button type="submit" disabled={pending} className="btn btn-primary w-full">

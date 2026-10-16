@@ -9,7 +9,7 @@ export default function LookupPage() {
       <div className="text-center">
         <h2 className="text-lg font-semibold text-white">Get your QR code</h2>
         <p className="mt-1 text-sm text-brand-100/80">
-          Enter the same name and company you used when you confirmed.
+          Enter the same email you used when you confirmed.
         </p>
       </div>
       <LookupForm />

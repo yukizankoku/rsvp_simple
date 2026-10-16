@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { emailConfigured, sendTicket } from "@/lib/email";
-import { clean, findByNameCompany, findPlusOne, readEmail, readNameCompany, saveRsvp, type RsvpResult } from "@/lib/guests";
+import { clean, findByEmail, findPlusOne, readEmail, readNameCompany, readPhone, saveRsvp, type RsvpResult } from "@/lib/guests";
 import { appUrl } from "@/lib/url";
 import { validateRsvp, type FieldErrors } from "@/lib/validation";
 
@@ -16,7 +16,8 @@ export async function submitRsvp(_prev: FormState, formData: FormData): Promise<
   const attendance = String(formData.get("attending") ?? "");
   const plusOne = clean(formData.get("plus_one"));
   const { email } = readEmail(formData);
-  const values = { name, company, email, attending: attendance, plus_one: plusOne };
+  const { phone } = readPhone(formData);
+  const values = { name, company, email, phone, attending: attendance, plus_one: plusOne };
 
   const fieldErrors = validateRsvp(formData);
   if (Object.keys(fieldErrors).length) return { fieldErrors, values };
@@ -25,18 +26,17 @@ export async function submitRsvp(_prev: FormState, formData: FormData): Promise<
 
   let result: RsvpResult;
   try {
-    result = await saveRsvp(token ? { token } : { name, company }, attendance === "yes", plusOne, email);
+    result = await saveRsvp(token ? { token } : { name, company }, attendance === "yes", plusOne, email, phone);
   } catch (e) {
     console.error("saveRsvp failed", e);
     return { error: "Something went wrong. Please try again.", values };
   }
   if (!result.ok) {
     if (result.reason === "not_found") return { error: "Invitation not found or has been removed.", values };
-    const message =
-      result.reason === "plus_one_same"
-        ? "Your companion's name cannot be the same as yours."
-        : "Your companion is already registered as a guest and does not need to be added again.";
-    return { fieldErrors: { plus_one: message }, values };
+    if (result.reason === "email_taken") {
+      return { fieldErrors: { email: "This email is already used by another guest." }, values };
+    }
+    return { fieldErrors: { plus_one: "Your companion's name cannot be the same as yours." }, values };
   }
 
   const guest = result.guest;
@@ -56,23 +56,20 @@ export async function submitRsvp(_prev: FormState, formData: FormData): Promise<
 }
 
 export async function lookupTicket(_prev: FormState, formData: FormData): Promise<FormState> {
-  const { name, company, error } = readNameCompany(formData);
-  const values = { name, company };
-  if (!name || !company) return { error: "Please enter your name and company name.", values };
-  if (error) return { error: "Name or company name is too long.", values };
+  const { email, error } = readEmail(formData);
+  const values = { email };
+  if (!email) return { error: "Please enter your email.", values };
+  if (error) return { error: "Please enter a valid email address.", values };
 
   let token: string | undefined;
   try {
-    token = (await findByNameCompany(name, company))?.token;
+    token = (await findByEmail(email))?.token;
   } catch (e) {
     console.error("lookupTicket failed", e);
     return { error: "Something went wrong. Please try again.", values };
   }
   if (!token) {
-    return {
-      error: "Not found. Make sure the name and company match what you entered when you confirmed.",
-      values,
-    };
+    return { error: "Not found. Make sure this is the email you entered when you confirmed.", values };
   }
   redirect(`/tiket/${token}`);
 }

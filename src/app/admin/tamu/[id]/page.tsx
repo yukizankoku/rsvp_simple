@@ -52,9 +52,9 @@ export default async function EditGuestPage({ params }: { params: Promise<{ id: 
           </div>
         </div>
       )}
-      <GuestEditForm id={guest.id} name={guest.name} company={guest.company} email={guest.email}
+      <GuestEditForm id={guest.id} name={guest.name} company={guest.company} email={guest.email} phone={guest.phone}
         attending={guest.attending}
-        plusOneName={plusOne?.name} />
+        plusOneName={plusOne?.name} isPlusOne={!!guest.plus_one_of} />
       {guest.attending && (
         <Link href={`/tiket/${guest.token}`} target="_blank" className="block text-center text-sm text-brand-600 hover:underline">
           Lihat halaman QR tamu ↗

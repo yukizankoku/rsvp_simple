@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { EventHeader, PublicShell } from "@/components/EventHeader";
+import { PublicShell } from "@/components/EventHeader";
+import { Invitation } from "@/components/Invitation";
 import { RsvpForm } from "@/components/RsvpForm";
 
 export default function HomePage() {
   return (
     <PublicShell>
-      <EventHeader />
+      <Invitation />
       <RsvpForm />
       <p className="text-center text-sm text-brand-100/80">
         Already confirmed?{" "}

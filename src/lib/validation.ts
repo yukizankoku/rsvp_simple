@@ -1,13 +1,19 @@
 // Shared by the RSVP form (instant feedback) and the server action (final check).
 
-export type RsvpField = "name" | "company" | "email" | "attending" | "plus_one";
+export type RsvpField = "name" | "company" | "email" | "phone" | "attending" | "plus_one";
 export type FieldErrors = Partial<Record<RsvpField, string>>;
 
 /** Order in which fields appear in the form, used to focus the first invalid one. */
-export const RSVP_FIELDS: RsvpField[] = ["name", "company", "email", "attending", "plus_one"];
+export const RSVP_FIELDS: RsvpField[] = ["name", "company", "email", "phone", "attending", "plus_one"];
 
 const MAX_LEN = 120;
 export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Digits with an optional leading "+", allowing spaces, dashes, dots and brackets: "+62 812-3456-7890". */
+export const PHONE_PATTERN = /^\+?[\d\s().-]{6,30}$/;
+
+export function isValidPhone(phone: string) {
+  return PHONE_PATTERN.test(phone) && phone.replace(/\D/g, "").length >= 6;
+}
 
 /** A personal invitation link carries a `token`, so name and company are already known. */
 export function validateRsvp(formData: FormData): FieldErrors {
@@ -23,6 +29,10 @@ export function validateRsvp(formData: FormData): FieldErrors {
   const email = text("email");
   if (!email) errors.email = "Please enter your email.";
   else if (email.length > 254 || !EMAIL_PATTERN.test(email)) errors.email = "Please enter a valid email address.";
+
+  // Optional.
+  const phone = text("phone");
+  if (phone && !isValidPhone(phone)) errors.phone = "Please enter a valid phone number.";
 
   const attending = formData.get("attending");
   if (attending !== "yes" && attending !== "no") errors.attending = "Please choose: Attending or Not attending.";

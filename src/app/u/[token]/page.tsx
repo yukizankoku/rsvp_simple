@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { EventHeader, PublicShell } from "@/components/EventHeader";
+import { PublicShell } from "@/components/EventHeader";
+import { Invitation } from "@/components/Invitation";
 import { RsvpForm } from "@/components/RsvpForm";
 import { findByToken, findPlusOne } from "@/lib/guests";
 
@@ -18,13 +19,14 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
 
   return (
     <PublicShell>
-      <EventHeader />
+      <Invitation guestName={guest.name} />
       <RsvpForm
         invite={{
           token,
           name: guest.name,
           company: guest.company,
           email: guest.email ?? undefined,
+          phone: guest.phone ?? undefined,
           attending: answered ? (guest.attending ? "yes" : "no") : undefined,
           plusOne: plusOne?.name,
           canBringPlusOne: !isPlusOne,
